@@ -118,8 +118,6 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
-<<<<<<< HEAD
-=======
     "com.unity.pipeline": {
       "version": "0.9.1-exp.1",
       "depth": 0,
@@ -134,7 +132,6 @@
       },
       "url": "https://packages.unity.com"
     },
->>>>>>> 613a175f433561d623d1190d0ba1b5a67ce5af68
     "com.unity.probuilder": {
       "version": "6.0.9",
       "depth": 0,
