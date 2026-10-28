@@ -37,3 +37,12 @@ Thumbs.db
 ServerData/
 StreamingAssets/aa.meta
 StreamingAssets/aa/
+
+# VScode
+.vscode/
+
+# Claude Code
+.claude/
+
+# screenshots
+Assets/Screenshots/
