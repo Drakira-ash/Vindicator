@@ -326,6 +326,10 @@ PrefabInstance:
       propertyPath: route
       value: 
       objectReference: {fileID: 495873419}
+    - target: {fileID: 1592246197036227940, guid: 0dba772d3006d4942a84551721120f01, type: 3}
+      propertyPath: groundMask.m_Bits
+      value: 51
+      objectReference: {fileID: 0}
     - target: {fileID: 4886317369775572351, guid: 0dba772d3006d4942a84551721120f01, type: 3}
       propertyPath: m_Name
       value: UnitDemo_Enemy
