@@ -1,0 +1,139 @@
+{
+  "schema_version": 1,
+  "updated_at": "2026-10-28T17:40:00Z",
+  "tasks": [
+    {
+      "id": "unit-face-target",
+      "title": "攻击时平滑朝向目标",
+      "status": "candidate",
+      "priority": 1,
+      "source": "YC/Unit实现记录_2026_10_28.md#六、已知限制与下一步（第 2 条）",
+      "description": "EnemyBrain 进入射程后 SetPaused(true) 并提前 return，朝向被冻结。暂停移动时仍需朝目标旋转。",
+      "acceptance_criteria": [
+        "进入射程暂停移动后，单位在 0.5s 内平滑面向目标（不瞬移旋转）。",
+        "目标死亡或离开射程后恢复移动，朝向随移动方向恢复正常。",
+        "MVP 场景中拆塔与转火 Home 的既有验收结果不回归。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-spline-route",
+      "title": "UnitRoute 折线改为 Catmull-Rom 样条",
+      "status": "candidate",
+      "priority": 2,
+      "source": "YC/Unit实现记录_2026_10_28.md#六、已知限制与下一步（第 1 条）",
+      "description": "当前 UnitMover 直奔路点，硬拐角。建议 centripetal Catmull-Rom、弧长参数化、沿切线转向；急弯限制圆角半径 0.5~0.8m。",
+      "acceptance_criteria": [
+        "22 点路线平滑后全程贴地连续，无新台阶（既有两处 0.19/0.24m 台阶不劣化）。",
+        "斜坡与塔体边缘不切角穿越。",
+        "MVP 场景完整走完路线，控制台 0 error。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "road-network-pathfinding",
+      "title": "TDRoadNetwork 寻路桥接",
+      "status": "candidate",
+      "priority": 2,
+      "source": "YC/Unit实现记录_2026_10_28.md#六、已知限制与下一步（第 3 条）",
+      "description": "用 TDRoadNetwork.TryGetNodePath（BFS）、FindNearestNode、TDRoadMeshBuilder.BuildEdgeSpline 生成运行时 UnitRoute；MVP 旧 PolyShape 路需先导入路网。",
+      "acceptance_criteria": [
+        "可从当前位置投影到最近节点/边并 BFS 生成可走路线。",
+        "目标切换（塔死亡转 Home）时能重规划并沿路网行走。",
+        "在 RoadWorkflow_Test 或迁移后的 MVP 场景中完成一次端到端行走。"
+      ],
+      "blockers": [
+        "MVP.unity 的旧 PolyShape 路尚无 TDRoadNetwork 图数据。"
+      ]
+    },
+    {
+      "id": "unit-stop-margin",
+      "title": "调整塔攻击停步余量",
+      "status": "candidate",
+      "priority": 3,
+      "source": "YC/Unit实现记录_2026_10_28.md#六、已知限制与下一步（第 4 条）",
+      "description": "实测停步距离 2.06m 对有效射程 2.1m，仅 4cm 余量；调塔碰撞体或射程容易回归为够不到。",
+      "acceptance_criteria": [
+        "塔与敌人碰撞体/射程调整后，敌人稳定进入可攻击距离并停下。",
+        "MVP 验收中塔与 Home 均被正常拆除。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-spatial-target-index",
+      "title": "UnitRegistry 空间索引（规模优化）",
+      "status": "deferred",
+      "priority": 4,
+      "source": "YC/Unit实现记录_2026_10_28.md#六、已知限制与下一步（第 5 条）",
+      "description": "当前 FindNearestHostile 为 O(N) 线性搜索；单位上千时改网格/四叉树。暂不触发。",
+      "acceptance_criteria": [
+        "有可复现的规模基准（目标单位数）后再实施。",
+        "索敌结果与线性搜索一致，帧耗时满足基准。"
+      ],
+      "blockers": [
+        "尚未出现规模需求。"
+      ]
+    },
+    {
+      "id": "harness-unity-verify",
+      "title": "接入 Unity 批处理编译/测试检查",
+      "status": "blocked",
+      "priority": 1,
+      "source": ".agent/reports/bootstrap-2026-10-28.md",
+      "description": "已实现双路径：编辑器内 `Tools/Harness/Verify Compilation` 写证据 + `agent.py unity-verify --adopt-editor` 盖章（已验证）；`agent.py unity-verify` 批处理（已实现，编辑器占锁时 exit 3 拒绝，端到端未运行）。失败保留日志片段与退出码。",
+      "acceptance_criteria": [
+        "一条命令能运行 Unity 批处理并明确报告编译成功/失败。",
+        "失败时保留可读日志片段与退出码。",
+        "不修改用户场景，不依赖人工点击。"
+      ],
+      "blockers": [
+        "批处理端到端需先关闭 Unity；非 CI 需求，优先级降低。"
+      ]
+    },
+    {
+      "id": "harness-editmode-tests",
+      "title": "编辑器内一键运行 EditMode 测试",
+      "status": "done",
+      "priority": 1,
+      "source": ".agent/memory/decisions/0005-no-ci-local-verification.md",
+      "description": "菜单 Tools/Harness/Run EditMode Tests 通过 TestRunnerApi 运行测试并写原始证据；agent.py unity-test --adopt-editor 盖章，--status 读结果。含一个不依赖 Assembly-CSharp 的项目资产冒烟测试。",
+      "acceptance_criteria": [
+        "编辑器菜单一键运行 EditMode 测试，不需要关闭 Unity，不进入 PlayMode。",
+        "结果写入 .agent/.local/unity-test-editor.json，adopt 后 --status 报告 pass/fail/过期。",
+        "至少一个真实测试用例通过（项目数据/预制体/验收场景存在性）。",
+        "不接 CI，不实现批处理测试路径。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "harness-shared-local-split",
+      "title": "梳理 .agent 共享与本机状态",
+      "status": "done",
+      "priority": 1,
+      "source": ".agent/memory/decisions/0006-shared-vs-local-state.md",
+      "description": "把 state.json、tasks/active.json、tasks/handoff.json、events/ 归为本机状态并加入 .agent/.gitignore；agent.py 允许缺失（validate 记 skip，session-start/checkpoint 建默认值）；Unity 安装路径移入 .agent/.local/env.json。",
+      "acceptance_criteria": [
+        "本机状态文件全部被 .agent/.gitignore 忽略，validate 的 git-ignore-local 检查通过。",
+        "删除本机状态后 validate --strict 仍通过（缺文件记 skip，不报 error）。",
+        "session-start 能从默认值重建 state.json 与 tasks/active.json。",
+        "project.json 不含本机 Unity 安装路径；批处理验证仍能找到编辑器（读 .local/env.json）。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "harness-live-awareness",
+      "title": "决定是否启用常驻 watcher / git hooks",
+      "status": "candidate",
+      "priority": 3,
+      "source": ".agent/reports/bootstrap-2026-10-28.md",
+      "description": "已提供 watch 与 hooks install，但默认未启动/未安装；需要决定是否让它们在本机常驻。",
+      "acceptance_criteria": [
+        "明确选择方案（手动 watch / 安装 git hooks / 两者 / 都不启用）。",
+        "若启用，验证提交后事件与 stale 标记生效，且不影响 Git 操作。"
+      ],
+      "blockers": [
+        "Hooks 只在本机 .git/hooks 生效，不随仓库分发。"
+      ]
+    }
+  ]
+}

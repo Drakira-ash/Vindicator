@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vindicator harness state",
+  "type": "object",
+  "required": [
+    "schema_version", "project", "updated_at", "branch", "last_verified_commit",
+    "working_tree", "working_tree_summary", "active_task_id", "task_status",
+    "blockers", "next_action", "index"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "project": {"type": "string"},
+    "updated_at": {"type": "string"},
+    "branch": {"type": "string"},
+    "last_verified_commit": {"type": "string"},
+    "working_tree": {"type": "string", "enum": ["clean", "dirty"]},
+    "working_tree_summary": {"type": "array", "items": {"type": "string"}},
+    "active_task_id": {"type": ["string", "null"]},
+    "task_status": {"type": "string", "enum": ["idle", "in_progress", "blocked", "done"]},
+    "blockers": {"type": "array", "items": {"type": "string"}},
+    "next_action": {"type": "string", "minLength": 1},
+    "index": {
+      "type": "object",
+      "required": ["generated_at", "signature", "stale"],
+      "properties": {
+        "generated_at": {"type": ["string", "null"]},
+        "signature": {"type": ["string", "null"]},
+        "stale": {"type": "boolean"}
+      }
+    }
+  }
+}

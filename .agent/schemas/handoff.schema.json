@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vindicator session handoff",
+  "type": "object",
+  "required": [
+    "schema_version", "generated_at", "session", "completed", "incomplete",
+    "files_changed", "checks", "not_run", "next_action", "blockers"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "generated_at": {"type": "string"},
+    "session": {"type": "string"},
+    "completed": {"type": "array", "items": {"type": "string"}},
+    "incomplete": {"type": "array", "items": {"type": "string"}},
+    "files_changed": {"type": "array", "items": {"type": "string"}},
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "command", "status", "detail"],
+        "properties": {
+          "name": {"type": "string"},
+          "command": {"type": "string"},
+          "status": {"type": "string", "enum": ["pass", "fail", "skip", "manual", "unverified"]},
+          "detail": {"type": "string"}
+        }
+      }
+    },
+    "not_run": {"type": "array", "items": {"type": "string"}},
+    "next_action": {"type": "string", "minLength": 1},
+    "blockers": {"type": "array", "items": {"type": "string"}}
+  }
+}

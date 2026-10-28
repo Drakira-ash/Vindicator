@@ -1,0 +1,15 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vindicator harness event",
+  "type": "object",
+  "required": ["ts", "type", "actor", "summary", "details", "git_head", "branch"],
+  "properties": {
+    "ts": {"type": "string"},
+    "type": {"type": "string", "minLength": 1},
+    "actor": {"type": "string", "minLength": 1},
+    "summary": {"type": "string", "minLength": 1},
+    "details": {"type": "object"},
+    "git_head": {"type": ["string", "null"]},
+    "branch": {"type": ["string", "null"]}
+  }
+}

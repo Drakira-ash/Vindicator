@@ -1,0 +1,16 @@
+# Generated, reproducible indexes (rebuild with: python .agent/scripts/agent.py index)
+indexes/*.json
+
+# Local runtime state, watcher heartbeat, validation output
+.local/
+
+# Machine-local session state. Shared progress lives in tasks/backlog.json,
+# memory/ and git history; these files differ per machine and would only conflict.
+/state.json
+/tasks/active.json
+/tasks/handoff.json
+/events/
+
+# Python bytecode
+__pycache__/
+*.pyc

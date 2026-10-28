@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Vindicator active task",
+  "type": "object",
+  "required": ["schema_version", "updated_at", "task"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "updated_at": {"type": "string"},
+    "note": {"type": "string"},
+    "task": {
+      "oneOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["id", "title", "status", "acceptance_criteria", "next_action"],
+          "properties": {
+            "id": {"type": "string"},
+            "title": {"type": "string", "minLength": 1},
+            "status": {"type": "string", "enum": ["planned", "in_progress", "blocked", "done"]},
+            "acceptance_criteria": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+            "next_action": {"type": "string", "minLength": 1},
+            "files": {"type": "array", "items": {"type": "string"}},
+            "blockers": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      ]
+    }
+  }
+}

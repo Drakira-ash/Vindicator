@@ -1,0 +1,109 @@
+{
+  "schema_version": 1,
+  "name": "Vindicator",
+  "description": "Unity 塔防（TD）游戏：固定路线的敌人/防御塔组件式单位系统，以及数据驱动的道路编辑工作流。",
+  "kind": "unity-game",
+  "engine": {
+    "name": "Unity",
+    "version": "6000.0.39f1",
+    "render_pipeline": "URP 17.0.3"
+  },
+  "language": "C#",
+  "git": {
+    "remote": "https://github.com/Drakira-ash/Vindicator.git",
+    "main_branch": "main",
+    "bootstrap_branch": "feature/npc-ai",
+    "bootstrap_commit": "daca2ed"
+  },
+  "paths": {
+    "scripts": "Assets/Script",
+    "scenes": "Assets/Scenes",
+    "prefabs": "Assets/Prefabs",
+    "unit_data": "Assets/UnitData",
+    "road_workflow": "Assets/TDWorkflow",
+    "acceptance_scene": "Assets/Scenes/MVP.unity",
+    "road_test_scene": "Assets/Scenes/RoadWorkflow_Test.unity",
+    "docs": [
+      "YC",
+      "YXZ"
+    ],
+    "harness": ".agent"
+  },
+  "commands": {
+    "session_start": "python .agent/scripts/agent.py session-start",
+    "status": "python .agent/scripts/agent.py status",
+    "index": "python .agent/scripts/agent.py index",
+    "validate": "python .agent/scripts/agent.py validate",
+    "watch": "python .agent/scripts/agent.py watch --interval 3",
+    "checkpoint": "python .agent/scripts/agent.py checkpoint --summary \"...\" --next \"...\"",
+    "events": "python .agent/scripts/agent.py event --type manual --summary \"...\"",
+    "hooks_install": "python .agent/scripts/agent.py hooks install",
+    "unity_verify": "python .agent/scripts/agent.py unity-verify",
+    "unity_verify_status": "python .agent/scripts/agent.py unity-verify --status",
+    "unity_verify_adopt_editor": "python .agent/scripts/agent.py unity-verify --adopt-editor",
+    "unity_test": "python .agent/scripts/agent.py unity-test",
+    "unity_test_status": "python .agent/scripts/agent.py unity-test --status",
+    "unity_test_adopt_editor": "python .agent/scripts/agent.py unity-test --adopt-editor"
+  },
+  "verification": {
+    "static_index": {
+      "status": "verified",
+      "command": "python .agent/scripts/agent.py index",
+      "note": "文件/资产/代码/依赖索引，不依赖 Unity 编辑器。"
+    },
+    "schema_and_integrity": {
+      "status": "verified",
+      "command": "python .agent/scripts/agent.py validate",
+      "note": "包含 JSON Schema、meta 配对、脚本引用、文档链接、索引新鲜度检查。"
+    },
+    "unity_compile": {
+      "status": "verified",
+      "command": "python .agent/scripts/agent.py unity-verify",
+      "editor_evidence_command": "python .agent/scripts/agent.py unity-verify --adopt-editor",
+      "note": "编辑器路径已验证：2026-10-28T17:21:47Z 全量强制重编译 pass，0 error / 0 warning（含 Assembly-CSharp、Assembly-CSharp-Editor、Vindicator.EditModeTests）。批处理路径已实现，未端到端运行（编辑器占锁时以退出码 3 拒绝，该拒绝路径已验证）。失败时日志片段与退出码见 .agent/.local/unity-verify.log 与记录。"
+    },
+    "unity_editmode_tests": {
+      "status": "verified",
+      "command": "python .agent/scripts/agent.py unity-test",
+      "editor_command": "Tools/Harness/Run EditMode Tests",
+      "note": "2026-10-28T17:19:13Z 编辑器内运行 pass，5/5（项目资产冒烟：单位模板、预制体、MVP 场景）。不关闭 Unity、不进入 PlayMode；本项目不做 CI。"
+    },
+    "unity_playmode_acceptance": {
+      "status": "manual",
+      "note": "需要 Unity 编辑器与 MCP/人工操作；无自动化测试场景。"
+    }
+  },
+  "index": {
+    "file_roots": [
+      "Assets",
+      "YC",
+      "YXZ",
+      "Packages",
+      "ProjectSettings"
+    ],
+    "root_files": [
+      "AGENTS.md",
+      "CLAUDE.md"
+    ],
+    "signature_roots": [
+      "Assets",
+      "YC",
+      "YXZ",
+      "Packages",
+      "ProjectSettings"
+    ],
+    "exclude_rel_prefixes": [
+      "Assets/Screenshots/",
+      ".agent/",
+      "Library/",
+      "Temp/",
+      "Logs/",
+      "obj/",
+      "Build/",
+      "Builds/",
+      "UserSettings/",
+      ".vs/"
+    ],
+    "package_guid_scan": "Library/PackageCache"
+  }
+}
