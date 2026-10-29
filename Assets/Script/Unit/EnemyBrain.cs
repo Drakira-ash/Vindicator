@@ -1,9 +1,10 @@
 using UnityEngine;
 
 /// <summary>
-/// 敌人行为：无目标时前往巡逻点，发现附近敌对目标后追击，进入射程后停下攻击；
-/// 目标死亡后重新搜索最近的敌人。被友军拦截时（<see cref="UnitEvents.InterceptRequested"/>）
-/// 把攻击目标切换为拦截者，拦截者死亡或距离过远后解除。
+/// 敌人行为：无目标时前往巡逻点，到达后在原地待命（Idle）；发现附近敌对目标后追击，
+/// 进入射程后停下攻击；目标死亡后重新搜索最近的敌人。被友军拦截时
+/// （<see cref="UnitEvents.InterceptRequested"/>）把攻击目标切换为拦截者，
+/// 拦截者死亡或距离过远后解除。
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Unit))]
@@ -11,6 +12,7 @@ public class EnemyBrain : MonoBehaviour
 {
     private enum State
     {
+        Idle,
         Patrol,
         Chase,
         Attack
@@ -118,26 +120,32 @@ public class EnemyBrain : MonoBehaviour
 
     private void Patrol()
     {
-        SetState(State.Patrol);
+        if (patrolGoal == null || DistanceToPatrolGoal() <= patrolArriveThreshold)
+        {
+            if (state != State.Idle)
+            {
+                SetState(State.Idle);
+                locomotion.Stop();
+            }
 
+            return;
+        }
+
+        SetState(State.Patrol);
+        locomotion.SetPaused(false);
+        locomotion.MoveTo(patrolGoal.position);
+    }
+
+    private float DistanceToPatrolGoal()
+    {
         if (patrolGoal == null)
         {
-            locomotion.Stop();
-            return;
+            return 0f;
         }
 
         Vector3 toGoal = patrolGoal.position - transform.position;
         toGoal.y = 0f;
-
-        if (toGoal.magnitude > patrolArriveThreshold)
-        {
-            locomotion.SetPaused(false);
-            locomotion.MoveTo(patrolGoal.position);
-        }
-        else
-        {
-            locomotion.Stop();
-        }
+        return toGoal.magnitude;
     }
 
     private void Chase()

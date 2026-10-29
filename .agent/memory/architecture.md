@@ -14,7 +14,7 @@
 | `UnitLocomotion` | 移动后端抽象：`SetPaused` / `MoveTo(worldPos)` / `Stop`；AI 只依赖该接口。 |
 | `UnitMotor` | NavMeshAgent 后端：速度每帧取 `StatBlock.MoveSpeed`；攻击时 `isStopped`，恢复后继续寻路；未落在 NavMesh 时 `Warp` 到最近点。 |
 | `UnitMover` | 贴地路点/坐标后端（实现 `UnitLocomotion`）：路点只给水平走向，高度由脚下 `SphereCast` 探测决定；无 route 时可用 `MoveTo` 追坐标。 |
-| `EnemyBrain` | Patrol → Chase → Attack；每 0.25s 索敌；目标进入射程则暂停并攻击；接受 `UnitEvents.InterceptRequested` 转火拦截者。 |
+| `EnemyBrain` | Idle → Patrol → Chase → Attack；每 0.25s 索敌；到达巡逻点 0.5m 内或未配巡逻点转 Idle（只 Stop 一次）；目标进入射程则暂停并攻击；接受 `UnitEvents.InterceptRequested` 转火拦截者。 |
 | `WarriorBrain` | Idle → Chase → Attack → Return；检测 10m、拴绳 14m；锁定敌人时发出拦截请求。 |
 | `UnitEvents` | 全局战斗事件；`InterceptRequested` 携带拦截者 `Unit` 与被拦截的 `UnitHealth`。 |
 | `UnitSpawner` | 测试用生成器：按间隔生成敌人并设置巡逻终点，出生点吸附 NavMesh。 |
