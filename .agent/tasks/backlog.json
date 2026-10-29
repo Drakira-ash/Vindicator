@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-28T17:40:00Z",
+  "updated_at": "2026-10-29T13:25:28Z",
   "tasks": [
     {
       "id": "unit-face-target",
@@ -134,6 +134,113 @@
       "blockers": [
         "Hooks 只在本机 .git/hooks 生效，不随仓库分发。"
       ]
+    },
+    {
+      "id": "unit-navmesh-locomotion",
+      "title": "单位移动迁移到 NavMeshAgent（UnitMotor + 移动抽象）",
+      "status": "done",
+      "priority": 1,
+      "source": "tmp.txt",
+      "description": "新增 UnitLocomotion 移动抽象与 UnitMotor（封装 NavMeshAgent：速度每帧取 StatBlock.MoveSpeed、攻击时 isStopped、恢复后继续寻路），UnitMover 改为实现同一抽象；EnemyBrain 改用抽象，不再硬依赖 UnitMover。新预制体挂 NavMeshAgent（radius≈0.4、height 2、slope 45）。UnitMover/UnitRoute 保留给 MVP 旧场景。",
+      "acceptance_criteria": [
+        "RoadWorkflow_Test 中敌人可从路网西端沿 NavMesh 走到 Home 前的可达终点 (15.89, 0.08, -2.39)，上坡不脱离导航网格。",
+        "修改 StatBlock.MoveSpeed 后 NavMeshAgent 实际速度同步变化。",
+        "进入攻击距离后完全停住，目标死亡或离开后恢复寻路。",
+        "MVP 旧场景使用 UnitMover 仍能编译（不再作为本轮验收场景）。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-warrior-brain",
+      "title": "新增战士单位与 WarriorBrain 状态机",
+      "status": "done",
+      "priority": 1,
+      "source": "YC/unit.md",
+      "description": "按 YC/unit.md：战士 50 血 / 5 攻 / 4 速 / 2s 间隔，Player 阵营。新增 WarriorBrain：Idle（驻守点待机）→ Chase（敌对单位进入检测范围后追击）→ Attack（进入攻击范围停下开火）→ Return（目标死亡/丢失后回驻守点）。检测范围暂定 10m、牵引距离 12~14m，确保两座坡道都能接敌。",
+      "acceptance_criteria": [
+        "无敌对单位时保持在驻守点 Idle，不抖动、不滑动。",
+        "敌对单位进入检测范围后走向目标；进入攻击范围后停下并攻击。",
+        "目标死亡或超出牵引距离后返回驻守点，到达后回到 Idle。",
+        "战士死亡后停止移动与索敌，不抛异常。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-intercept-event",
+      "title": "拦截事件：战士发出、敌人接受并检测",
+      "status": "done",
+      "priority": 1,
+      "source": "tmp.txt",
+      "description": "新增 UnitEvents 静态事件与 InterceptRequest（拦截者 Unit + 目标 UnitHealth）。WarriorBrain 锁定敌人时发出拦截请求；EnemyBrain 订阅并检测：目标是自己、双方存活、阵营敌对、拦截者在接受距离内、自己未被其他拦截者占用。接受后转火拦截者；拦截者死亡或超出牵引距离则释放并恢复原目标/路线。",
+      "acceptance_criteria": [
+        "每次拦截尝试在控制台有 [Intercept] 请求与接受/拒绝原因日志。",
+        "被接受的敌人在一个索敌周期内把目标切换为拦截者。",
+        "拦截者死亡或超出牵引距离后，敌人释放拦截并重新索敌或回到巡逻终点。",
+        "事件订阅与注销成对，单位销毁后无 MissingReferenceException。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-attack-damage-delay",
+      "title": "攻击增加伤害延迟（起手 → 结算）",
+      "status": "done",
+      "priority": 1,
+      "source": "tmp.txt",
+      "description": "AttackAbility 增加 damageDelay（默认 0.3s）：满足射程与冷却时立即起手并开始冷却，延迟结束后再结算伤害与溅射；目标在延迟期间死亡则落空。日志区分起手与命中。",
+      "acceptance_criteria": [
+        "命中日志相对起手日志晚约 damageDelay 秒（帧级容差）。",
+        "目标在起手后、结算前死亡时不产生伤害，也不报错。",
+        "冷却仍按攻击间隔计算，不会因延迟重复结算或叠加两次伤害。",
+        "关闭延迟（0）时行为与现在一致。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-death-wiring",
+      "title": "死亡事件与状态机接线",
+      "status": "done",
+      "priority": 2,
+      "source": "tmp.txt",
+      "description": "确认并补齐死亡链路：敌人死亡后停止寻路、战士释放拦截并回位；战士死亡后敌人释放拦截并重新索敌；死亡单位从 UnitRegistry 注销；延迟攻击落空；不留下事件订阅。",
+      "acceptance_criteria": [
+        "击杀战士后，所有以它为目标的敌人在一个索敌周期内转火或回到巡逻终点。",
+        "击杀敌人后，战士在一个索敌周期内开始返回驻守点。",
+        "死亡单位血量归零、Died 事件触发、延迟销毁，随后从注册表消失。",
+        "30 敌场景全程控制台无 MissingReferenceException。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-ai-test-scene",
+      "title": "RoadWorkflow_Test 一键生成 AI 验收布置",
+      "status": "done",
+      "priority": 1,
+      "source": "tmp.txt",
+      "description": "扩展编辑器工具：新增菜单在 RoadWorkflow_Test 生成/更新战士与塔的模板和预制体；两个坡道各放 2 名战士、1 座塔（abilitiesEnabled=false）；路网西端 node6 放 UnitSpawner（30 个普通敌人、按间隔生成、落在 NavMesh 上），敌人巡逻终点设为 Home 前的可达点 (15.89, 0.08, -2.39)（Home 平台在 NavMesh 上不可达）。重复执行不重复生成。",
+      "acceptance_criteria": [
+        "菜单可重复执行，第二次不会产生重复对象。",
+        "4 名战士与 2 座塔均落在坡道顶部或 NavMesh 采样范围内（距 NavMesh ≤1.5m）。",
+        "Spawner 能生成 30 个敌人，出生点不重叠、不卡在坡道外；巡逻终点的 CalculatePath 为 PathComplete。",
+        "塔的攻击保持关闭，控制台无塔攻击日志。",
+        "场景层级清晰（Warriors/Towers/EnemySpawner 命名固定），MarkSceneDirty 后可由用户保存。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-ai-acceptance",
+      "title": "PlayMode 验收敌人/战士/拦截/伤害/死亡四条链路",
+      "status": "done",
+      "priority": 1,
+      "source": "tmp.txt",
+      "description": "在 RoadWorkflow_Test 运行 PlayMode（runInBackground=true，适度 timeScale），通过控制台日志与 MCP 采样核对：敌人索敌/追击/转火；战士 Idle→Chase→Attack；伤害削减与死亡结算；拦截事件发出与接受。记录到 YC 文档并更新架构/决策记忆。",
+      "acceptance_criteria": [
+        "验收 1：敌人就近索敌并走向最近单位，击杀后成功转火。",
+        "验收 2：战士常态 Idle，敌人进入检测范围后追击，进入攻击范围后攻击。",
+        "验收 3：血量按攻击值降低，死亡事件与销毁正常结算。",
+        "验收 4：拦截事件正常发出并被敌人接受（日志可查）。",
+        "结果写入 YC/ToDo_2026_10_29.md；agent.py validate 0 error。"
+      ],
+      "blockers": []
     }
   ]
 }

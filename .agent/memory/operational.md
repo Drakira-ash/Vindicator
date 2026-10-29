@@ -82,6 +82,7 @@
 - 无自动化测试资产；PlayMode 验收需人工或 MCP。
 - 编辑器窗口失焦时游戏循环会暂停；后台观察前设置 `Application.runInBackground = true`。首帧读取可能发生在 `Awake` 前，需等初始化完成再采样。
 - 已有验收记录使用 `Time.timeScale=10`、控制台观察 `[Unit]` / `[AI]` 日志；结果见 [YC/ToDo_2026_10_28.md](../../YC/ToDo_2026_10_28.md)。
+- NavMesh AI 验收：菜单 `Tools/Unit/Create AI Test Scene` 重建 `RoadWorkflow_Test` 的 4 战士 + 2 塔 + 30 敌人生成器；PlayMode 观察 `[AI]` / `[Warrior]` / `[Intercept]` / `[Attack]` / `[Unit]` 日志，结果见 [YC/ToDo_2026_10_29.md](../../YC/ToDo_2026_10_29.md)。测试预制体打开了 `logAttacks`，日志带 `Time.time`，可用于核对 0.3s 起手延迟。
 - Unity MCP 的可用性按机器/会话而异：先确认本机编辑器已启动并连接（`mcpforunity://instances`），再使用 `mcp__UnityMCP__*`。
 
 ## 常见失败模式

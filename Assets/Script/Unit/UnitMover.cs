@@ -1,14 +1,16 @@
 using UnityEngine;
 
 /// <summary>
-/// 沿 <see cref="UnitRoute"/> 做贴地移动：路点只提供水平走向，高度完全由脚下的球体投射决定。
+/// 贴地移动后端。两种模式：<see cref="MoveTo"/> 指定的世界坐标（AI 追击），
+/// 或沿 <see cref="UnitRoute"/> 的路点前进（脚本化演示）。
+/// 路点只提供水平走向，高度完全由脚下的球体投射决定。
 /// 每帧在候选位置向下投射，只接受坡度不超过 <see cref="maxSlopeAngle"/> 的表面，
 /// 可跨越不高于 <see cref="stepHeight"/> 的台阶，并向下吸附不超过 <see cref="snapDistance"/> 的落差；
 /// 找不到可站立表面（陡坡、悬空）时原地不动。
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Unit))]
-public class UnitMover : MonoBehaviour
+public class UnitMover : UnitLocomotion
 {
     [SerializeField] private UnitRoute route;
     [SerializeField, Min(0.05f)] private float arriveThreshold = 0.25f;
@@ -30,6 +32,8 @@ public class UnitMover : MonoBehaviour
     private bool paused;
     private bool finished;
     private bool warned;
+    private bool hasDestination;
+    private Vector3 destination;
 
     /// <summary>当前路线。</summary>
     public UnitRoute Route
@@ -42,9 +46,23 @@ public class UnitMover : MonoBehaviour
     public bool Finished => finished;
 
     /// <summary>暂停/恢复移动。</summary>
-    public void SetPaused(bool value)
+    public override void SetPaused(bool value)
     {
         paused = value;
+    }
+
+    /// <summary>切换到坐标模式并朝目标移动；到达后原地站住，不推进路线。</summary>
+    public override void MoveTo(Vector3 worldPosition)
+    {
+        hasDestination = true;
+        destination = worldPosition;
+        paused = false;
+    }
+
+    /// <summary>退出坐标模式；路线模式下单位回到下一个路点继续前进。</summary>
+    public override void Stop()
+    {
+        hasDestination = false;
     }
 
     /// <summary>回到路线起点重新开始。</summary>
@@ -62,21 +80,29 @@ public class UnitMover : MonoBehaviour
 
     private void Update()
     {
-        if (route == null || route.Count == 0)
-        {
-            WarnOnce();
-            return;
-        }
-
-        if (paused || finished)
+        if (paused)
         {
             return;
         }
 
-        if (waypointIndex >= route.Count)
+        if (!hasDestination)
         {
-            finished = true;
-            return;
+            if (route == null || route.Count == 0)
+            {
+                WarnOnce();
+                return;
+            }
+
+            if (finished)
+            {
+                return;
+            }
+
+            if (waypointIndex >= route.Count)
+            {
+                finished = true;
+                return;
+            }
         }
 
         Vector3 feet = transform.position - Vector3.up * groundOffset;
@@ -85,14 +111,18 @@ public class UnitMover : MonoBehaviour
             feet.y = ground.point.y;
         }
 
-        Vector3 target = route.GetPoint(waypointIndex);
+        Vector3 target = hasDestination ? destination : route.GetPoint(waypointIndex);
         Vector3 toTarget = target - feet;
         toTarget.y = 0f;
 
         float horizontalDistance = toTarget.magnitude;
         if (horizontalDistance <= arriveThreshold)
         {
-            waypointIndex++;
+            if (!hasDestination)
+            {
+                waypointIndex++;
+            }
+
             ApplyFeetPosition(feet);
             return;
         }

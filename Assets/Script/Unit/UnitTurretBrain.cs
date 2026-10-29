@@ -54,7 +54,7 @@ public class UnitTurretBrain : MonoBehaviour
         }
 
         var unityObject = target as Object;
-        if (unityObject != null && unityObject == null)
+        if (unityObject == null)
         {
             return false;
         }

@@ -8,7 +8,7 @@ using UnityEngine.SceneManagement;
 /// 一键搭建 Unit 验收场景：单位模板、材质、预制体、路线、斜坡上的塔与敌人、可破坏的 Home。
 /// 菜单：Tools/Unit/Create Unit Test Scene
 /// </summary>
-public static class UnitDemoSetup
+public static partial class UnitDemoSetup
 {
     private const string DataRoot = "Assets/UnitData";
     private const string MaterialRoot = "Assets/UnitData/Materials";

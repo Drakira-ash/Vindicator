@@ -160,6 +160,7 @@ MonoBehaviour:
   abilityEnabled: 1
   hitPadding: 0.6
   splashPadding: 0
+  damageDelay: 0.3
   logAttacks: 0
 --- !u!114 &5009600478300507060
 MonoBehaviour:

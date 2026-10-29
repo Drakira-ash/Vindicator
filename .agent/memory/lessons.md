@@ -35,8 +35,9 @@
    来源：同上结论 5；[architecture.md](architecture.md)。
 
 8. **固定路线 TD 优先路点/样条，不用 NavMesh**
-   条件：路线固定、无动态障碍。NavMesh 适合开放区域。该结论已用于当前实现；改变前提时重新评估。
-   来源：[YC/Research/README.md](../../YC/Research/README.md) 结论 4。
+   条件：路线固定、无动态障碍。NavMesh 适合开放区域。
+   2026-10-29 更新：`RoadWorkflow_Test` 已有烘焙 NavMesh，新 AI（NavMeshAgent + 拦截）改走 NavMesh；MVP 仍用 `UnitMover` 路点。两种后端通过 `UnitLocomotion` 抽象共存。
+   来源：[YC/Research/README.md](../../YC/Research/README.md) 结论 4；[YC/ToDo_2026_10_29.md](../../YC/ToDo_2026_10_29.md)。
 
 ## Unity 观测
 
@@ -86,3 +87,12 @@
     条件：脚本化触发 EditMode 测试。`Execute` 立即返回；测试异步跑完后 `RunFinished(ITestResultAdaptor)` 才带完整结果。根节点有 `Children`，叶子节点才是具体用例。
     做法：`ScriptableObject.CreateInstance<TestRunnerApi>()` + `RegisterCallbacks`；在 `RunFinished` 递归统计叶子；结束后 `UnregisterCallbacks`。
     来源：harness-editmode-tests 实测（5/5，2.89s）。
+
+19. **接口引用指向已销毁的 UnityEngine.Object 时，`target.IsAlive` 不可信**
+    条件：AI 缓存 `IDamageable` 目标，目标被 Destroy。现象：接口引用不等于 null，`IsAlive` 读到销毁前的字段仍为 true，Brain 卡在 Attack，访问 `DamageTransform` 抛 `MissingReferenceException`。
+    做法：先 `var uo = target as UnityEngine.Object; if (uo == null) return false;` 再读 `IsAlive`。注意 `if (uo != null && uo == null)` 恒为 false，是无效写法。
+    来源：[YC/ToDo_2026_10_29.md](../../YC/ToDo_2026_10_29.md) 发现并修复的问题。
+
+20. **NavMesh 坡顶采样要取“可行走平面”，不是网格中心**
+    条件：在斜坡上放单位/塔。`NavMesh.SamplePosition` 或网格包围盒中心可能给到坡面中段 y≈2.0；实际平顶在 y=3.5。先向下射线扫描 normalY>0.95 且 `NavMesh.SamplePosition` 命中的平面，再用 `NavMesh.CalculatePath` 验证 PathComplete。
+    来源：同上，坡顶布置点 (-2.9,3.5,-4.1)、(-14.2,3.5,2.0)。

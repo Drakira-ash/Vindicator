@@ -29,3 +29,4 @@
 - [0004 Unity 编译验证：双路径 + 编译输入签名](decisions/0004-unity-compile-verification.md)
 - [0005 不接 CI；验证只在本地编辑器内完成](decisions/0005-no-ci-local-verification.md)
 - [0006 `.agent/` 共享知识与本机状态分离](decisions/0006-shared-vs-local-state.md)
+- [0007 NavMesh AI、移动抽象与事件式拦截](decisions/0007-navmesh-ai-combat.md)

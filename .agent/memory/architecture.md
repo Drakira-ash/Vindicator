@@ -10,18 +10,24 @@
 | `UnitDefinition` | ScriptableObject 模板：名称、阵营、血量、攻击、移速、攻击间隔、射程、溅射、能否移动/攻击。 |
 | `StatBlock` | 运行时可变属性容器，按 `StatType` 存取，支持修正值；**运行时不改 SO 资产**。 |
 | `UnitHealth` | `IDamageable`；受伤/死亡事件、延迟销毁、注册进 `UnitRegistry`。 |
-| `UnitAbility` / `AttackAbility` | 能力基类与攻击能力；冷却、有效射程、可选溅射。新增能力继承基类即可被 `Unit` 调度。 |
-| `UnitMover` | 沿 `UnitRoute` 路点移动；路点只给水平走向，高度由脚下 `SphereCast` 探测决定。 |
-| `EnemyBrain` | 每 0.25s 索敌；目标进入射程则暂停移动并攻击；目标死亡/丢失后恢复。 |
+| `UnitAbility` / `AttackAbility` | 能力基类与攻击能力；冷却、有效射程、可选溅射；`damageDelay`（默认 0.3s）起手后才结算伤害，起手期间目标死亡则落空。 |
+| `UnitLocomotion` | 移动后端抽象：`SetPaused` / `MoveTo(worldPos)` / `Stop`；AI 只依赖该接口。 |
+| `UnitMotor` | NavMeshAgent 后端：速度每帧取 `StatBlock.MoveSpeed`；攻击时 `isStopped`，恢复后继续寻路；未落在 NavMesh 时 `Warp` 到最近点。 |
+| `UnitMover` | 贴地路点/坐标后端（实现 `UnitLocomotion`）：路点只给水平走向，高度由脚下 `SphereCast` 探测决定；无 route 时可用 `MoveTo` 追坐标。 |
+| `EnemyBrain` | Patrol → Chase → Attack；每 0.25s 索敌；目标进入射程则暂停并攻击；接受 `UnitEvents.InterceptRequested` 转火拦截者。 |
+| `WarriorBrain` | Idle → Chase → Attack → Return；检测 10m、拴绳 14m；锁定敌人时发出拦截请求。 |
+| `UnitEvents` | 全局战斗事件；`InterceptRequested` 携带拦截者 `Unit` 与被拦截的 `UnitHealth`。 |
+| `UnitSpawner` | 测试用生成器：按间隔生成敌人并设置巡逻终点，出生点吸附 NavMesh。 |
 | `UnitTurretBrain` | 塔 AI：原地索敌与开火；是否可攻击由 `Unit.abilitiesEnabled` 控制。 |
 | `UnitRegistry` | 静态注册表；`FindNearestHostile` 线性搜索。 |
 | `UnitRoute` | 路点序列（Transform 列表）。 |
 | `UnitTeam`, `IDamageable` | 阵营枚举/工具与伤害接口。 |
 | `Editor/UnitDemoSetup.cs` | 菜单 `Tools ▸ Unit ▸ Create Unit Test Scene`，重建模板/材质/预制体/22 点路线/塔/敌人/Home。 |
+| `Editor/UnitAITestSetup.cs` | 菜单 `Tools ▸ Unit ▸ Create AI Test Scene`，在 `RoadWorkflow_Test` 生成 4 战士 + 2 塔 + 30 敌人生成器 + 巡逻点，可重复执行。 |
 
-数据流：`UnitDefinition` → `Unit.Awake` 写入 `StatBlock` 与血量 → `EnemyBrain` 索敌 → `Unit.ActivateAbilities` → `AttackAbility` 造成伤害 → `UnitHealth` 事件/死亡 → 注册表注销 → Brain 恢复移动或转火。
+数据流：`UnitDefinition` → `Unit.Awake` 写入 `StatBlock` 与血量 → Brain 索敌（`UnitRegistry`）→ `Unit.ActivateAbilities` → `AttackAbility` 起手/延迟结算 → `UnitHealth` 事件/死亡 → 注册表注销 → Brain 重新索敌、返回驻守点或解除拦截。
 
-详细实现记录：[YC/Unit实现记录_2026_10_28.md](../../YC/Unit实现记录_2026_10_28.md)。设计依据：[YC/Research/README.md](../../YC/Research/README.md)。
+详细实现记录：[YC/Unit实现记录_2026_10_28.md](../../YC/Unit实现记录_2026_10_28.md)、[YC/ToDo_2026_10_29.md](../../YC/ToDo_2026_10_29.md)。设计依据：[YC/Research/README.md](../../YC/Research/README.md)。
 
 ## 2. 路网系统（`Assets/Script/TDWorkflow/`）
 
@@ -34,7 +40,7 @@
 
 生成结果：`Assets/TDWorkflow/Generated/RoadWorkflow_Test_Road.asset`（网格资产）及若干材质。完整操作说明：[YXZ/道路编辑工作流.md](../../YXZ/道路编辑工作流.md)。
 
-**尚未桥接**：单位仍走手写 `UnitRoute` 路点，不沿 `TDRoadNetwork` 寻路；MVP 场景没有路网图数据。
+**尚未桥接**：`TDRoadNetwork` 的 BFS 路径还不是单位的移动来源。`RoadWorkflow_Test` 中的新 AI 单位走场景里已烘焙的 `NavMeshSurface`；MVP 旧场景仍走手写 `UnitRoute` 路点，且没有路网图数据。
 
 ## 3. Harness 编译验证（`.agent/scripts/agent.py` + `Assets/Editor/HarnessUnityVerify.cs`）
 
@@ -61,9 +67,10 @@
 4. **单位与地面层分离**：敌人/塔放在 Ignore Raycast 层，`groundMask` 必须排除该层；新增单位层时同步维护 mask。当前未提交修改把 `groundMask.m_Bits` 设为 `51`（层 0/1/4/5，排除层 2），保留用户改动。
 5. **塔“关闭攻击”= `abilitiesEnabled = false`**，不要删能力组件。
 6. **停步余量很窄**：实测 2.06m vs 有效射程 2.1m（仅 4cm）；调整碰撞体/射程/停步距离要重跑验收。
-7. **MVP 是验收场景，RoadWorkflow_Test 是路网工具场景**：跨场景改动前先确认；路网文档明确当时未改 MVP。
+7. **MVP 与 RoadWorkflow_Test 分工随轮次变化**：MVP 是 `UnitMover` 贴地路线的旧验收场景；`RoadWorkflow_Test` 是 NavMesh AI/拦截验收场景（2026-10-29 起）。跨场景改动前先确认当前验收场景。
 8. **`.meta`/GUID 完整性**：移动或新增资产必须保留配对；场景/预制体的脚本引用依赖 GUID。
 9. **harness 共享与本机分离**：`state.json`、`tasks/{active,handoff}.json`、`events/` 是本机状态，可能不存在；跨机以 `backlog.json` + `git log` 为准。本机 Unity 路径放 `.agent/.local/env.json`，不要写回 `project.json`。
+10. **缓存的 `IDamageable` 目标必须先做假空判断**：目标对象被销毁后接口引用仍非 null，直接读 `IsAlive`/`DamageTransform` 会得到陈旧数据或抛 `MissingReferenceException`。先 `target as UnityEngine.Object == null`，再读属性。
 
 ## 5. 资产关系（概览）
 
