@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-10-29T13:25:28Z",
+  "updated_at": "2026-11-02T12:23:58Z",
   "tasks": [
     {
       "id": "unit-face-target",
@@ -239,6 +239,21 @@
         "验收 3：血量按攻击值降低，死亡事件与销毁正常结算。",
         "验收 4：拦截事件正常发出并被敌人接受（日志可查）。",
         "结果写入 YC/ToDo_2026_10_29.md；agent.py validate 0 error。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-tower-projectiles",
+      "title": "箭塔发射追踪投射物与跟随血条",
+      "status": "done",
+      "priority": 1,
+      "source": "tmp.txt",
+      "description": "新增 Projectile（每 tick 朝目标当前位置重算速度矢量、触发范围结算、扫掠保护、单次结算、发射时快照阵营）；AttackAbility 支持可选 projectilePrefab，未配置时保持直接伤害路径；UnitTurretBrain 目标出射程后立即重索敌；新增 HealthBar 世界空间跟随血条（独立对象、无 Collider、billboard 朝向主相机）。新增菜单 Tools/Unit/Create Projectile Test Scene 在 RoadWorkflow_Test 生成 4 战士 + 2 座攻击箭塔 + 30 敌人，旧 AI 场景菜单保持塔攻击关闭。",
+      "acceptance_criteria": [
+        "验收 1：投射物进入触发范围后命中目标，血量按伤害正常结算（HealthChanged、归零死亡、单次结算、不为负）。",
+        "验收 2：目标移动时投射物每 tick 重算速度矢量：方向随目标改变、速度标量恒为 20。",
+        "血条跟随目标并朝向主相机，且不引入 Collider（不改变 UnitHealth.DistanceTo 判定）。",
+        "重复执行布置菜单不产生重复对象；旧 AI 场景（塔攻击关闭、无投射物）不回归。"
       ],
       "blockers": []
     }

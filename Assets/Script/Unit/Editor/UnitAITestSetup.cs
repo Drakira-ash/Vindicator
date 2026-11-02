@@ -36,6 +36,14 @@ public static partial class UnitDemoSetup
     [MenuItem("Tools/Unit/Create AI Test Scene", false, 11)]
     public static void CreateAITestScene()
     {
+        BuildAITestScene(false);
+    }
+
+    /// <summary>
+    /// 重建同一个验收场景。<paramref name="towersAttack"/> 为 true 时塔使用投射物变体并开启攻击。
+    /// </summary>
+    private static void BuildAITestScene(bool towersAttack)
+    {
         if (!EnsureAITestSceneOpen())
         {
             return;
@@ -66,7 +74,9 @@ public static partial class UnitDemoSetup
 
         var enemyPrefab = CreateNavEnemyPrefab(enemyDefinition, enemyMaterial);
         var warriorPrefab = CreateWarriorPrefab(warriorDefinition, warriorMaterial);
-        var towerPrefab = CreateTowerPrefab(towerDefinition, towerMaterial);
+        var towerPrefab = towersAttack
+            ? CreateProjectileTowerPrefab(towerDefinition, towerMaterial, EnsureArrowProjectilePrefab())
+            : CreateTowerPrefab(towerDefinition, towerMaterial);
 
         RemoveAITestObjects();
 
@@ -112,7 +122,9 @@ public static partial class UnitDemoSetup
         Selection.activeGameObject = spawnerObject;
         EditorGUIUtility.PingObject(spawnerObject);
 
-        Debug.Log("[Unit] AI 验收场景已就绪：4 名战士 + 2 座塔（攻击关闭）+ 30 名敌人，巡逻点 " + patrolGoal.transform.position);
+        Debug.Log(towersAttack
+            ? "[Unit] 投射物验收场景已就绪：4 名战士 + 2 座塔（发射箭矢）+ 30 名敌人，巡逻点 " + patrolGoal.transform.position
+            : "[Unit] AI 验收场景已就绪：4 名战士 + 2 座塔（攻击关闭）+ 30 名敌人，巡逻点 " + patrolGoal.transform.position);
     }
 
     private static bool EnsureAITestSceneOpen()
@@ -141,6 +153,7 @@ public static partial class UnitDemoSetup
         ConfigureAgent(agent, definition.moveSpeed);
         temp.AddComponent<UnitMotor>();
         temp.AddComponent<EnemyBrain>();
+        EnsureHealthBar(temp, 1.4f);
 
         SetSerializedValue(unit, "definition", definition);
         SetSerializedValue(temp.GetComponent<UnitHealth>(), "logDamage", true);
@@ -159,6 +172,7 @@ public static partial class UnitDemoSetup
         ConfigureAgent(agent, definition.moveSpeed);
         temp.AddComponent<UnitMotor>();
         temp.AddComponent<WarriorBrain>();
+        EnsureHealthBar(temp, 1.4f);
 
         SetSerializedValue(unit, "definition", definition);
         SetSerializedValue(temp.GetComponent<UnitHealth>(), "logDamage", true);

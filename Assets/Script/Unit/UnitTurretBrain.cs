@@ -31,7 +31,16 @@ public class UnitTurretBrain : MonoBehaviour
         if (!HasLiveTarget())
         {
             target = null;
+        }
+        else if (target.DistanceTo(transform.position) > unit.GetAttackRange())
+        {
+            // 目标走出射程后立即重搜，否则会一直锁定一个够不到的单位而停火。
+            target = null;
+            searchTimer = 0f;
+        }
 
+        if (target == null)
+        {
             searchTimer -= Time.deltaTime;
             if (searchTimer <= 0f)
             {

@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 5215320498319243565}
   - component: {fileID: 9112981612104144505}
   - component: {fileID: 1611168313235553852}
+  - component: {fileID: 7868968972657041837}
   m_Layer: 0
   m_Name: Enemy_Normal_Nav
   m_TagString: Untagged
@@ -164,6 +165,8 @@ MonoBehaviour:
   splashPadding: 0
   damageDelay: 0.3
   logAttacks: 1
+  projectilePrefab: {fileID: 0}
+  muzzleHeight: 1.5
 --- !u!195 &5215320498319243565
 NavMeshAgent:
   m_ObjectHideFlags: 0
@@ -217,3 +220,18 @@ MonoBehaviour:
   interceptAcceptRange: 12
   interceptLeash: 20
   logState: 1
+--- !u!114 &7868968972657041837
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4040697202599503766}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ba4cee49dc44bab4d9282cbfb90567ea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  width: 1.2
+  height: 0.16
+  heightOffset: 1.4

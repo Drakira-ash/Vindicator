@@ -162,6 +162,8 @@ MonoBehaviour:
   splashPadding: 0
   damageDelay: 0.3
   logAttacks: 0
+  projectilePrefab: {fileID: 0}
+  muzzleHeight: 1.5
 --- !u!114 &5009600478300507060
 MonoBehaviour:
   m_ObjectHideFlags: 0

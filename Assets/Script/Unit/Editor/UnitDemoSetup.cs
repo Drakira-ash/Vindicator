@@ -18,6 +18,8 @@ public static partial class UnitDemoSetup
     private const string TowerDefinitionPath = DataRoot + "/Tower_Arrow.asset";
     private const string EnemyPrefabPath = PrefabRoot + "/Enemy_Normal.prefab";
     private const string TowerPrefabPath = PrefabRoot + "/Tower_Arrow.prefab";
+    private const string ArrowPrefabPath = PrefabRoot + "/Arrow_Projectile.prefab";
+    private const string ProjectileTowerPrefabPath = PrefabRoot + "/Tower_Arrow_Projectile.prefab";
 
     private const string RouteRootName = "UnitRoute";
     private const string EnemyInstanceName = "UnitDemo_Enemy";
@@ -200,6 +202,82 @@ public static partial class UnitDemoSetup
         var prefab = PrefabUtility.SaveAsPrefabAsset(temp, TowerPrefabPath);
         UnityEngine.Object.DestroyImmediate(temp);
         return prefab;
+    }
+
+    /// <summary>
+    /// 会发射箭矢的箭塔变体：能力开启 + 绑定投射物预制体。共享的 Tower_Arrow.prefab 保持不变。
+    /// </summary>
+    private static GameObject CreateProjectileTowerPrefab(UnitDefinition definition, Material material, GameObject arrowPrefab)
+    {
+        var temp = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        temp.name = "Tower_Arrow_Projectile";
+        temp.transform.localScale = new Vector3(1.2f, 1.5f, 1.2f);
+        ApplyMaterial(temp, material);
+
+        temp.AddComponent<UnitHealth>();
+        var unit = temp.AddComponent<Unit>();
+        var attack = temp.AddComponent<AttackAbility>();
+        temp.AddComponent<UnitTurretBrain>();
+        EnsureHealthBar(temp, 2.1f);
+
+        SetSerializedValue(unit, "definition", definition);
+        SetSerializedValue(unit, "abilitiesEnabled", true);
+        SetSerializedValue(temp.GetComponent<UnitHealth>(), "logDamage", true);
+        SetSerializedValue(attack, "projectilePrefab", arrowPrefab);
+        SetSerializedValue(attack, "logAttacks", true);
+        SetSerializedValue(attack, "muzzleHeight", 1.6f);
+
+        return SavePrefab(temp, ProjectileTowerPrefabPath);
+    }
+
+    /// <summary>
+    /// 箭矢预制体：细长 Cube 指向 +Z，无 Collider，挂在 Ignore Raycast 层，
+    /// 避免被地面采样/射线检测命中。速度 20、触发范围 1（与验收建议一致）。
+    /// </summary>
+    private static GameObject EnsureArrowProjectilePrefab()
+    {
+        var material = CreateOrUpdateMaterial(MaterialRoot + "/Arrow_Mat.mat", new Color(0.95f, 0.78f, 0.25f));
+
+        var temp = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        temp.name = "Arrow_Projectile";
+        temp.transform.localScale = new Vector3(0.08f, 0.08f, 0.5f);
+        UnityEngine.Object.DestroyImmediate(temp.GetComponent<Collider>());
+        ApplyMaterial(temp, material);
+
+        int layer = LayerMask.NameToLayer("Ignore Raycast");
+        if (layer >= 0)
+        {
+            temp.layer = layer;
+        }
+
+        var projectile = temp.AddComponent<Projectile>();
+        SetSerializedValue(projectile, "speed", 20f);
+        SetSerializedValue(projectile, "triggerRange", 1f);
+        SetSerializedValue(projectile, "maxLifetime", 5f);
+        SetSerializedValue(projectile, "logHits", true);
+        SetSerializedValue(projectile, "logFlight", true);
+
+        return SavePrefab(temp, ArrowPrefabPath);
+    }
+
+    /// <summary>
+    /// 给单位追加世界空间血条。血条对象在运行时单独创建，不带 Collider，
+    /// 因此不会改变 <see cref="UnitHealth.DistanceTo"/> 的判定。
+    /// </summary>
+    private static void EnsureHealthBar(GameObject target, float heightOffset)
+    {
+        if (target == null)
+        {
+            return;
+        }
+
+        var healthBar = target.GetComponent<HealthBar>();
+        if (healthBar == null)
+        {
+            healthBar = target.AddComponent<HealthBar>();
+        }
+
+        SetSerializedValue(healthBar, "heightOffset", heightOffset);
     }
 
     private static UnitRoute CreateRoute()

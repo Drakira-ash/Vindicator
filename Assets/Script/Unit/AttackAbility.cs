@@ -12,6 +12,8 @@ public class AttackAbility : UnitAbility
     [SerializeField, Min(0f)] private float splashPadding = 0f;
     [SerializeField, Min(0f)] private float damageDelay = 0.3f;
     [SerializeField] private bool logAttacks = false;
+    [SerializeField] private GameObject projectilePrefab;
+    [SerializeField, Min(0f)] private float muzzleHeight = 1.5f;
 
     private struct PendingHit
     {
@@ -117,6 +119,11 @@ public class AttackAbility : UnitAbility
             return;
         }
 
+        if (projectilePrefab != null && SpawnProjectile(target, damage, splash))
+        {
+            return;
+        }
+
         target.TakeDamage(damage, Owner);
 
         if (splash > 0f)
@@ -129,6 +136,31 @@ public class AttackAbility : UnitAbility
             Debug.Log(string.Format("[Attack] t={3:F2} {0} -> {1} 造成 {2:F1} 伤害",
                 Owner.name, target.DamageTransform.name, damage, Time.time), Owner);
         }
+    }
+
+    /// <summary>
+    /// 发射投射物。预制体缺 <see cref="Projectile"/> 时记错误并返回 false，由调用方回退到直接伤害。
+    /// </summary>
+    private bool SpawnProjectile(IDamageable target, float damage, float splash)
+    {
+        var projectile = projectilePrefab.GetComponent<Projectile>();
+        if (projectile == null)
+        {
+            Debug.LogError("AttackAbility 的 projectilePrefab 缺少 Projectile 组件：" + projectilePrefab.name, this);
+            return false;
+        }
+
+        Vector3 spawnPosition = transform.position + Vector3.up * muzzleHeight;
+        var instance = Instantiate(projectile, spawnPosition, transform.rotation);
+        instance.Launch(target, damage, splash, Owner);
+
+        if (logAttacks)
+        {
+            Debug.Log(string.Format("[Attack] t={3:F2} {0} 发射投射物 -> {1}（伤害 {2:F1}）",
+                Owner.name, target.DamageTransform.name, damage, Time.time), Owner);
+        }
+
+        return true;
     }
 
     private static bool IsAliveTarget(IDamageable target)
