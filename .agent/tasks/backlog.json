@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-02T12:23:58Z",
+  "updated_at": "2026-11-12T07:45:00Z",
   "tasks": [
     {
       "id": "unit-face-target",
@@ -256,6 +256,52 @@
         "重复执行布置菜单不产生重复对象；旧 AI 场景（塔攻击关闭、无投射物）不回归。"
       ],
       "blockers": []
+    },
+    {
+      "id": "ui-selection-roster-panel",
+      "title": "单位选择/框选与部队预览 UI 面板",
+      "status": "in_progress",
+      "priority": 1,
+      "source": "YXZ/交互式设计案/单位选择与部队预览UI面板.doc",
+      "description": "在 RoadWorkflow_Test.unity 的副本场景 Assets/Scenes/UI_Test.unity 中实现：单击选择 / Ctrl 多选 / 拖动框选 / 点空白取消；可展开收回的部队预览面板（敌人/友军两栏，3x2 卡片，+X 溢出角标）；选中单位周身高亮（Vindicator/UnitHighlight 描边 shader）。副本保持 RoadWorkflow_Test 的真实玩法（怪物逐波刷出、塔防交战），不冻结战斗。原 MVP.unity 与 RoadWorkflow_Test.unity 均未被修改。代码集中在 Assets/Script/UI/（Logic 为无依赖程序集，其余为 Interaction/Panels/Core/Editor）。",
+      "acceptance_criteria": [
+        "单击单位可选中；拖动可框选多个；点击空白或再次框选会替换/清空上次选择。",
+        "面板可在展开态（两栏卡片）与隐藏态（仅中央展开按钮）之间切换，动画平滑。",
+        "面板按阵营分为敌人/友军两栏，每栏最多 6 张卡，超出显示 +X 角标，点击 +X 展开完整列表。",
+        "选中单位有周身高亮描边，友军/敌军不同色；取消选择后描边消失。",
+        "卡片与场景双向联动：点卡片选中场景单位，场景框选同步高亮卡片，单位死亡后卡片移除并刷新计数。",
+        "MVP.unity 保持未修改；Tools/UI/Create Selection Test Scene 可重复执行不重复生成。"
+      ],
+      "blockers": [],
+      "progress": {
+        "done": [
+          "代码骨架：ScreenProjector / RosterCounter / RosterLayout（Vindicator.UI.Logic 无依赖程序集）",
+          "SelectionService / SelectionInputReader / DragBoxView / SelectionHighlighter / UnitSelectable / ISelectable",
+          "RosterModel / RosterPanelView / UnitCardView / OverflowBadgeView / PanelTween / UIRoot / UIFontProvider",
+          "UnitHighlight.shader（描边 + 复用 URP Lit 前向光照）、MaterialPropertyBlock 高亮（不污染共享材质）",
+          "UnitRegistry 增加 Changed 静态事件（面板及时刷新）",
+          "Editor：Tools/UI/Create Selection Test Scene（复制 RoadWorkflow_Test → UI_Test）、Refresh Highlight Materials、Verify Selection Test Scene",
+          "Unity 编译验证 pass（0 error / 0 warning，签名新鲜）",
+          "EditMode 测试 18/18 通过（新增 3 个 RosterLayout 几何不变量用例）",
+          "布局静态校验：6 个场景单位全部在视野内，0 个被面板遮挡",
+          "容器与内容自适配：面板 536x294、栏位 244x274、网格 244x216 全部由 RosterLayout 推算",
+          "框选偏移修复：ScreenPointToLocalPointInRectangle 返回以父级 pivot 为原点的局部坐标，需减去父级 rect.min 才对齐左下角锚点；实测 BL(300,200)/TR(700,500) 精确吻合，正反拖拽等价",
+          "选择语义：普通单击替换选择、点同一单位仍是选中、点空白清空；Ctrl+单击切换多选（加入/移出）；SelectionService.Instance 作为全局选择入口",
+          "面板高度增加 BadgeHeight(24px) 预留行，+X 角标移到栏位底部，不再遮挡卡片",
+          "修复栏标题计数绑定错误（原先指向溢出角标文本）",
+          "副本恢复真实玩法：移除演示小队与战斗冻结，怪物由 AI_Spawner 逐波刷出",
+          "UnitSelectableBootstrap：运行时刷出的怪物在 UnitRegistry 事件里自动补 UnitSelectable，不改预制体",
+          "运行时高亮材质：素材生成到 Assets/Resources/UIHighlight，SelectionHighlighter 对未换材质的怪按名字加载共享变体（不产生材质实例）；修复预制体材质扫描因 GetComponentInParent 默认跳过未激活组件而漏掉敌人材质",
+          "选中/取消高亮的最终方案：不替换本体材质/shader。选中时给渲染器追加 SelectionOutline 材质槽（Vindicator/SelectionOutline，inverted hull，不参与光照），取消时还原原始材质数组；SelectionOutlineState 组件记录原数组。实测选中后再取消，本体亮度和未选中单位完全一致（同机位截图对比），描边正常出现/消失",
+          "删除旧 UnitHighlight.shader、全部 *_Highlight.mat 与 Assets/UIData；移除编辑器端高亮材质生成/替换与 Refresh Highlight Materials 菜单；移除 UnitSpawner.UnitPrefab 与重复的 shader 赋值"
+        ],
+        "pending": [
+          "PlayMode 人工手感验收：实际点击/框选手感、描边观感、面板展开动画",
+          "单位卡片图标仍为阵营色块占位，待美术资源接入",
+          "面板完整列表未虚拟化（当前规模够用）",
+          "友军栏在激战中会随战士阵亡而变少，属真实玩法；若需要稳定的友军验收数据，需另做演练模式"
+        ]
+      }
     }
   ]
 }

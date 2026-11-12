@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -12,17 +13,28 @@ public static class UnitRegistry
     /// <summary>当前所有已注册目标（只读）。</summary>
     public static IReadOnlyList<UnitHealth> All => units;
 
+    /// <summary>
+    /// 注册表内容发生变化时触发（注册或注销各触发一次）。
+    /// UI 面板据此在单位生成/死亡时及时刷新，而不必每帧轮询。
+    /// 订阅方必须在 OnDisable 中成对注销，避免残留静态引用。
+    /// </summary>
+    public static event Action Changed;
+
     public static void Register(UnitHealth health)
     {
         if (health != null && !units.Contains(health))
         {
             units.Add(health);
+            Changed?.Invoke();
         }
     }
 
     public static void Unregister(UnitHealth health)
     {
-        units.Remove(health);
+        if (units.Remove(health))
+        {
+            Changed?.Invoke();
+        }
     }
 
     /// <summary>
