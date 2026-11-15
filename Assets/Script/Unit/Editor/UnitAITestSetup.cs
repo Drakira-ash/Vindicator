@@ -11,6 +11,13 @@ using UnityEngine.SceneManagement;
 /// </summary>
 public static partial class UnitDemoSetup
 {
+    private enum TowerSetup
+    {
+        Disabled,
+        Projectile,
+        RuinedWithCitizens
+    }
+
     private const string AITestScenePath = "Assets/Scenes/RoadWorkflow_Test.unity";
     private const string WarriorDefinitionPath = DataRoot + "/Warrior_Guard.asset";
     private const string EnemyNavPrefabPath = PrefabRoot + "/Enemy_Normal_Nav.prefab";
@@ -36,13 +43,13 @@ public static partial class UnitDemoSetup
     [MenuItem("Tools/Unit/Create AI Test Scene", false, 11)]
     public static void CreateAITestScene()
     {
-        BuildAITestScene(false);
+        BuildAITestScene(TowerSetup.Disabled);
     }
 
     /// <summary>
-    /// 重建同一个验收场景。<paramref name="towersAttack"/> 为 true 时塔使用投射物变体并开启攻击。
+    /// 重建同一个验收场景。塔位按 <paramref name="towerSetup"/> 生成普通塔、投射物塔或废墟。
     /// </summary>
-    private static void BuildAITestScene(bool towersAttack)
+    private static void BuildAITestScene(TowerSetup towerSetup)
     {
         if (!EnsureAITestSceneOpen())
         {
@@ -56,12 +63,14 @@ public static partial class UnitDemoSetup
         var enemyDefinition = CreateOrUpdateDefinition(
             EnemyDefinitionPath, "普通敌人", UnitTeam.Enemy,
             maxHealth: 100f, attack: 10f, moveSpeed: 2f, attackInterval: 2f,
-            range: 1.5f, splashRadius: 0f, canMove: true, canAttack: true);
+            range: 1.5f, splashRadius: 0f, canMove: true, canAttack: true,
+            perceptionRange: 7f);
 
         var warriorDefinition = CreateOrUpdateDefinition(
             WarriorDefinitionPath, "战士", UnitTeam.Player,
             maxHealth: 50f, attack: 5f, moveSpeed: 4f, attackInterval: 2f,
-            range: 2f, splashRadius: 0f, canMove: true, canAttack: true);
+            range: 2f, splashRadius: 0f, canMove: true, canAttack: true,
+            perceptionRange: 4f);
 
         var towerDefinition = CreateOrUpdateDefinition(
             TowerDefinitionPath, "箭塔", UnitTeam.Player,
@@ -74,11 +83,26 @@ public static partial class UnitDemoSetup
 
         var enemyPrefab = CreateNavEnemyPrefab(enemyDefinition, enemyMaterial);
         var warriorPrefab = CreateWarriorPrefab(warriorDefinition, warriorMaterial);
-        var towerPrefab = towersAttack
-            ? CreateProjectileTowerPrefab(towerDefinition, towerMaterial, EnsureArrowProjectilePrefab())
-            : CreateTowerPrefab(towerDefinition, towerMaterial);
 
-        RemoveAITestObjects();
+        GameObject towerPrefab;
+        GameObject citizenPrefab = null;
+        switch (towerSetup)
+        {
+            case TowerSetup.Projectile:
+                towerPrefab = CreateProjectileTowerPrefab(
+                    towerDefinition, towerMaterial, EnsureArrowProjectilePrefab());
+                break;
+            case TowerSetup.RuinedWithCitizens:
+                towerPrefab = CreateRuinTowerPrefab(
+                    towerDefinition, towerMaterial, EnsureArrowProjectilePrefab());
+                citizenPrefab = CreateCitizenPrefab();
+                break;
+            default:
+                towerPrefab = CreateTowerPrefab(towerDefinition, towerMaterial);
+                break;
+        }
+
+        RemoveAITestObjects(SceneManager.GetActiveScene().GetRootGameObjects());
 
         int layer = LayerMask.NameToLayer("Ignore Raycast");
         for (int i = 0; i < WarriorSpots.Length; i++)
@@ -115,6 +139,16 @@ public static partial class UnitDemoSetup
         SetSerializedValue(spawner, "scatterRadius", 0.5f);
         SetSerializedValue(spawner, "patrolGoal", patrolGoal.transform);
 
+        if (citizenPrefab != null)
+        {
+            CreateCitizenInstances(citizenPrefab);
+        }
+
+        if (towerSetup == TowerSetup.RuinedWithCitizens)
+        {
+            EnsureDeveloperModeObject();
+        }
+
         var scene = SceneManager.GetActiveScene();
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
@@ -122,9 +156,18 @@ public static partial class UnitDemoSetup
         Selection.activeGameObject = spawnerObject;
         EditorGUIUtility.PingObject(spawnerObject);
 
-        Debug.Log(towersAttack
-            ? "[Unit] 投射物验收场景已就绪：4 名战士 + 2 座塔（发射箭矢）+ 30 名敌人，巡逻点 " + patrolGoal.transform.position
-            : "[Unit] AI 验收场景已就绪：4 名战士 + 2 座塔（攻击关闭）+ 30 名敌人，巡逻点 " + patrolGoal.transform.position);
+        switch (towerSetup)
+        {
+            case TowerSetup.Projectile:
+                Debug.Log("[Unit] 投射物验收场景已就绪：4 名战士 + 2 座塔（发射箭矢）+ 30 名敌人，巡逻点 " + patrolGoal.transform.position);
+                break;
+            case TowerSetup.RuinedWithCitizens:
+                Debug.Log("[Unit] 建筑验收场景已就绪：2 座废墟塔 + 2 名公民 + 4 名战士 + 30 名敌人，巡逻点 " + patrolGoal.transform.position);
+                break;
+            default:
+                Debug.Log("[Unit] AI 验收场景已就绪：4 名战士 + 2 座塔（攻击关闭）+ 30 名敌人，巡逻点 " + patrolGoal.transform.position);
+                break;
+        }
     }
 
     private static bool EnsureAITestSceneOpen()
@@ -222,22 +265,40 @@ public static partial class UnitDemoSetup
         return spot;
     }
 
-    private static void RemoveAITestObjects()
+    /// <summary>
+    /// 清理给定根对象集合中由验收菜单生成的对象，保证重复执行菜单不会产生重复布置。
+    /// 只处理传入的根集合，避免误删其他已加载场景中的对象（例如测试 additive 载入的场景）。
+    /// </summary>
+    public static void RemoveAITestObjects(GameObject[] roots)
     {
-        var existing = GameObject.FindObjectsByType<Transform>(FindObjectsSortMode.None);
-        for (int i = existing.Length - 1; i >= 0; i--)
+        if (roots == null)
         {
-            var candidate = existing[i];
-            if (candidate == null)
+            return;
+        }
+
+        for (int i = 0; i < roots.Length; i++)
+        {
+            if (roots[i] == null)
             {
                 continue;
             }
 
-            string name = candidate.name;
-            if (name.StartsWith("AI_Warrior_") || name.StartsWith("AI_Tower_") ||
-                name == "AI_Spawner" || name == "AI_PatrolGoal")
+            var transforms = roots[i].GetComponentsInChildren<Transform>(true);
+            for (int j = transforms.Length - 1; j >= 0; j--)
             {
-                Object.DestroyImmediate(candidate.gameObject);
+                var candidate = transforms[j];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                string name = candidate.name;
+                if (name.StartsWith("AI_Warrior_") || name.StartsWith("AI_Tower_") ||
+                    name.StartsWith("AI_Citizen_") ||
+                    name == "AI_Spawner" || name == "AI_PatrolGoal" || name == "DeveloperMode")
+                {
+                    Object.DestroyImmediate(candidate.gameObject);
+                }
             }
         }
     }

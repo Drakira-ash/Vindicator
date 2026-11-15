@@ -51,6 +51,8 @@ public class Unit : MonoBehaviour
             stats.SetBase(StatType.AttackInterval, definition.attackInterval);
             stats.SetBase(StatType.Range, definition.range);
             stats.SetBase(StatType.SplashRadius, definition.splashRadius);
+            stats.SetBase(StatType.PerceptionRange, definition.perceptionRange);
+            stats.SetBase(StatType.Productivity, definition.productivity);
         }
 
         for (int i = 0; i < abilities.Length; i++)

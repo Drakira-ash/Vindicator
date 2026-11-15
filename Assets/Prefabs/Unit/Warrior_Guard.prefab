@@ -213,10 +213,12 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4ebc58efd083d8043bd5012e711363bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  detectRange: 10
+  detectRange: 4
   leashRange: 14
   guardArriveThreshold: 0.5
   searchInterval: 0.25
+  commandArriveRadius: 0.6
+  interceptEnabled: 0
   logState: 1
 --- !u!114 &8660913650096440568
 MonoBehaviour:

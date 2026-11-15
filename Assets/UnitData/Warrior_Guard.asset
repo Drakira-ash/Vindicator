@@ -20,5 +20,7 @@ MonoBehaviour:
   attackInterval: 2
   range: 2
   splashRadius: 0
+  perceptionRange: 4
+  productivity: 0
   canMove: 1
   canAttack: 1

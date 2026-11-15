@@ -4,7 +4,10 @@
     "references": [
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
-        "Vindicator.UI.Logic"
+        "Vindicator.UI.Logic",
+        "Vindicator.Gameplay",
+        "Vindicator.Gameplay.Editor",
+        "Vindicator.TestSupport"
     ],
     "includePlatforms": [
         "Editor"

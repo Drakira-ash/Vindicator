@@ -107,7 +107,8 @@ public static partial class UnitDemoSetup
     private static UnitDefinition CreateOrUpdateDefinition(
         string path, string displayName, UnitTeam team,
         float maxHealth, float attack, float moveSpeed, float attackInterval,
-        float range, float splashRadius, bool canMove, bool canAttack)
+        float range, float splashRadius, bool canMove, bool canAttack,
+        float perceptionRange = 0f, float productivity = 0f)
     {
         var definition = AssetDatabase.LoadAssetAtPath<UnitDefinition>(path);
         if (definition == null)
@@ -124,6 +125,8 @@ public static partial class UnitDemoSetup
         definition.attackInterval = attackInterval;
         definition.range = range;
         definition.splashRadius = splashRadius;
+        definition.perceptionRange = perceptionRange;
+        definition.productivity = productivity;
         definition.canMove = canMove;
         definition.canAttack = canAttack;
 

@@ -1,0 +1,39 @@
+{
+  "checks": [
+    {
+      "name": "unity-test",
+      "kind": "test",
+      "required": true,
+      "timeout": 120,
+      "command": "python ../../../.agent/scripts/agent.py unity-test --status"
+    },
+    {
+      "name": "unity-verify",
+      "kind": "type",
+      "required": true,
+      "timeout": 120,
+      "command": "python ../../../.agent/scripts/agent.py unity-verify --status"
+    },
+    {
+      "name": "harness-index",
+      "kind": "test",
+      "required": true,
+      "timeout": 120,
+      "command": "python ../../../.agent/scripts/agent.py index"
+    },
+    {
+      "name": "harness-validate",
+      "kind": "test",
+      "required": false,
+      "timeout": 120,
+      "command": "python ../../../.agent/scripts/agent.py validate"
+    }
+  ],
+  "env_allow": ["SYSTEMROOT"],
+  "reviewer_scripts": {
+    "enabled": true,
+    "interpreters": ["python"],
+    "timeout": 300,
+    "max_bytes": 262144
+  }
+}

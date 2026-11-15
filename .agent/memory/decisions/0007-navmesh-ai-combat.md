@@ -16,7 +16,7 @@ MVP 场景没有 NavMesh，不能直接删掉 `UnitMover`；两套移动需要�
    - `UnitMotor` 封装 `NavMeshAgent`（速度每帧取 `StatBlock`，攻击时 `isStopped`，恢复后继续寻路）。
    - `UnitMover` 继续实现贴地路点，并新增坐标模式，MVP 场景不用改。
 2. **新 AI 场景 `RoadWorkflow_Test`**：敌人与战士使用 `UnitMotor` + 场景已烘焙的 `NavMeshSurface`；不新增运行时 NavMesh 烘焙。
-3. **拦截用静态事件** `UnitEvents.InterceptRequested`：战士锁定敌人时发出请求；敌人自行校验（目标是自己、双方存活、敌对、距离 ≤ 12m、未被其他拦截者占用）。接受后转火拦截者，拦截者死亡或距离 > 20m 时释放。
+3. **拦截用静态事件** `UnitEvents.InterceptRequested` / `InterceptReleased`：战士锁定敌人时发出请求；敌人自行校验（目标是自己、双方存活、敌对、距离 ≤ 12m、未被其他拦截者占用）。接受后转火拦截者：拦截者进入攻击范围才攻击，否则原地待命（Idle）不再移动；拦截者死亡、距离 > 20m 或主动放弃追击（超出自身拴绳时发 `InterceptReleased`）时释放。为避免战士按自身较长射程停步、把敌人挡在其射程外，战士接战距离取双方射程较小值。完整状态机见 [YC/Unit状态机_2026_11_02.md](../../../YC/Unit状态机_2026_11_02.md)。
 4. **攻击起手延迟**：`AttackAbility.damageDelay = 0.3s`；冷却在起手时开始，延迟结束才结算；目标中途死亡则落空。
 5. **测试布置编辑器化**：`Tools/Unit/Create AI Test Scene` 一键生成/重建，避免手改场景 YAML；生成器 `UnitSpawner` 按间隔生成 30 个敌人。
 

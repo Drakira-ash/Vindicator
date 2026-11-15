@@ -12,6 +12,16 @@ public abstract class UnitLocomotion : MonoBehaviour
     /// <summary>移动到世界坐标（追击目标、返回驻守点）。</summary>
     public abstract void MoveTo(Vector3 worldPosition);
 
-    /// <summary>停止并清空当前移动目标。</summary>
+    /// <summary>
+    /// 停止并清空当前移动目标。注意 <see cref="UnitMover"/> 的清空目标会让单位回到路线跟随，
+    /// 因此需要真正静止时请用 <see cref="Halt"/>。
+    /// </summary>
     public abstract void Stop();
+
+    /// <summary>停止并保持停止：清空移动目标并暂停，用于 Idle/死亡等需要真正静止的状态。</summary>
+    public void Halt()
+    {
+        Stop();
+        SetPaused(true);
+    }
 }
