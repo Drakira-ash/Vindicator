@@ -1,7 +1,9 @@
 {
     "name": "Vindicator.Gameplay",
     "rootNamespace": "",
-    "references": [],
+    "references": [
+        "UnityEngine.UI"
+    ],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,

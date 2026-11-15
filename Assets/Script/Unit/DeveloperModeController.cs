@@ -18,7 +18,13 @@ public class DeveloperModeController : MonoBehaviour
     [SerializeField] private Color playerColor = new Color(0.2f, 0.6f, 1f);
     [SerializeField] private Color enemyColor = new Color(1f, 0.25f, 0.2f);
     [SerializeField] private Color neutralColor = new Color(0.85f, 0.85f, 0.2f);
-    [SerializeField, Range(0.02f, 1f)] private float sphereAlpha = 0.18f;
+
+    // 填充很淡、边缘提亮：几十个球重叠时仍然看得清场景。
+    [SerializeField, Range(0.01f, 0.5f)] private float sphereAlpha = 0.1f;
+    [SerializeField, Range(0f, 1f)] private float rimAlpha = 0.55f;
+    [SerializeField, Range(0.5f, 8f)] private float rimPower = 2.5f;
+
+    private const string PerceptionShaderName = "Vindicator/PerceptionVolume";
 
     private readonly Dictionary<UnitHealth, GameObject> spheres = new Dictionary<UnitHealth, GameObject>();
     private readonly Dictionary<UnitTeam, Material> materials = new Dictionary<UnitTeam, Material>();
@@ -237,9 +243,31 @@ public class DeveloperModeController : MonoBehaviour
         }
 
         color.a = sphereAlpha;
-        var material = CreateTransparentMaterial(color);
+        var material = CreatePerceptionMaterial(color, rimAlpha, rimPower);
         materials[team] = material;
         return material;
+    }
+
+    /// <summary>
+    /// 优先用专用 shader：它靠模板缓冲做“同一像素只画一层”，重叠的球不会越叠越深。
+    /// 找不到时退回通用半透明 Unlit（旧行为，重叠仍会累积）。
+    /// </summary>
+    private static Material CreatePerceptionMaterial(Color color, float rimAlpha, float rimPower)
+    {
+        var perceptionShader = Shader.Find(PerceptionShaderName);
+        if (perceptionShader != null)
+        {
+            var perception = new Material(perceptionShader) { hideFlags = HideFlags.DontSave };
+            perception.SetColor("_BaseColor", color);
+
+            var rim = color;
+            rim.a = rimAlpha;
+            perception.SetColor("_RimColor", rim);
+            perception.SetFloat("_RimPower", rimPower);
+            return perception;
+        }
+
+        return CreateTransparentMaterial(color);
     }
 
     private static Material CreateTransparentMaterial(Color color)

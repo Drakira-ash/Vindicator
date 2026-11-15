@@ -7,24 +7,30 @@ using UnityEngine;
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Unit))]
-public class WarriorBrain : MonoBehaviour, IPerceptionSource
+public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
 {
     private enum State
     {
         Idle,
+        Move,
         Chase,
         Attack,
         Return
     }
 
-    [SerializeField, Min(0f)] private float detectRange = 10f;
+    // 民兵是宝贵资源：默认只在 4m 内主动接敌（2026-11-08 计划，由 10 下调）。
+    [SerializeField, Min(0f)] private float detectRange = 4f;
     [SerializeField, Min(0f)] private float leashRange = 14f;
     [SerializeField, Min(0.1f)] private float guardArriveThreshold = 0.5f;
     [SerializeField, Min(0.05f)] private float searchInterval = 0.25f;
+    [SerializeField, Min(0.1f)] private float commandArriveRadius = 0.6f;
+    [SerializeField] private bool interceptEnabled = false;
     [SerializeField] private bool logState = true;
 
     private Unit unit;
     private UnitLocomotion locomotion;
+    private UnitCommander commander;
+    private UnitTargetState targets;
     private IDamageable target;
     private Vector3 guardPosition;
     private float searchTimer;
@@ -50,6 +56,8 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource
     {
         unit = GetComponent<Unit>();
         locomotion = GetComponent<UnitLocomotion>();
+        commander = GetComponent<UnitCommander>();
+        targets = UnitTargetState.Ensure(gameObject);
         guardPosition = transform.position;
 
         if (locomotion == null)
@@ -81,21 +89,43 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource
             return;
         }
 
+        // UnitCommander 可能由 SquadRegistry 在运行期补挂（晚于 Awake），这里按需补取。
+        if (commander == null)
+        {
+            commander = GetComponent<UnitCommander>();
+        }
+
+        // 玩家命令优先于个体 AI：先执行移动/集火，命令结束后再恢复驻守逻辑。
+        if (commander != null && commander.HasOrder)
+        {
+            ExecuteOrder();
+            return;
+        }
+
         if (!HasLiveTarget())
         {
+            if (target != null)
+            {
+                targets.ClearAll();
+            }
+
             target = null;
         }
 
         if (target != null && IsBeyondLeash())
         {
             Log(string.Format("[Warrior] {0} 目标 {1} 超出拴绳，放弃追击", name, target.DamageTransform.name));
-            var health = target as UnitHealth;
-            if (health != null)
+            if (interceptEnabled)
             {
-                UnitEvents.RaiseInterceptReleased(new InterceptRequest(unit, health));
+                var health = target as UnitHealth;
+                if (health != null)
+                {
+                    UnitEvents.RaiseInterceptReleased(new InterceptRequest(unit, health));
+                }
             }
 
             target = null;
+            targets.ClearAll();
         }
 
         if (target == null)
@@ -137,8 +167,64 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource
         }
 
         target = candidate;
-        UnitEvents.RaiseInterceptRequested(new InterceptRequest(unit, candidate));
-        Log(string.Format("[Intercept] {0} 请求拦截 {1}", name, candidate.name));
+
+        // 拦截暂时关闭（2026-11-08 计划）：默认只锁定并追击，不再通知敌人转火。
+        if (interceptEnabled)
+        {
+            UnitEvents.RaiseInterceptRequested(new InterceptRequest(unit, candidate));
+            Log(string.Format("[Intercept] {0} 请求拦截 {1}", name, candidate.name));
+        }
+        else
+        {
+            Log(string.Format("[Warrior] {0} 锁定 {1}", name, candidate.name));
+        }
+    }
+
+    private void ExecuteOrder()
+    {
+        if (commander.OrderType == UnitOrderType.Move)
+        {
+            target = null;
+            targets.ClearAll();
+
+            Vector3 destination = commander.Destination;
+            if (UnitCommander.HorizontalDistance(transform.position, destination) <= commandArriveRadius)
+            {
+                commander.ClearOrder();
+                guardPosition = transform.position;
+                SetState(State.Idle);
+                locomotion.Halt();
+                return;
+            }
+
+            SetState(State.Move);
+            locomotion.SetPaused(false);
+            locomotion.MoveTo(destination);
+            return;
+        }
+
+        if (commander.OrderType == UnitOrderType.Attack)
+        {
+            if (!commander.TryGetAttackTarget(out var attackTarget))
+            {
+                commander.ClearOrder();
+                target = null;
+                targets.ClearAll();
+                Guard();
+                return;
+            }
+
+            target = attackTarget;
+            if (CheckAttack())
+            {
+                return;
+            }
+
+            Chase();
+            return;
+        }
+
+        commander.ClearOrder();
     }
 
     private void Chase()
@@ -146,6 +232,8 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource
         SetState(State.Chase);
         locomotion.SetPaused(false);
         locomotion.MoveTo(target.DamageTransform.position);
+        targets.SetChase(target.DamageTransform);
+        targets.ClearLock();
     }
 
     private bool CheckAttack()
@@ -158,6 +246,8 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource
 
         SetState(State.Attack);
         locomotion.SetPaused(true);
+        targets.SetLock(target.DamageTransform);
+        targets.ClearChase();
         unit.ActivateAbilities(target);
         return true;
     }
@@ -187,6 +277,8 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource
 
     private void Guard()
     {
+        targets.ClearAll();
+
         Vector3 toGuard = guardPosition - transform.position;
         toGuard.y = 0f;
 
@@ -258,6 +350,11 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource
     {
         enabled = false;
         target = null;
+
+        if (targets != null)
+        {
+            targets.ClearAll();
+        }
 
         if (locomotion != null)
         {

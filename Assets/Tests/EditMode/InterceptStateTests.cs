@@ -317,7 +317,7 @@ public class InterceptStateTests
     public void WarriorDeath_WhileEngaged_DisablesBrainAndStopsMovement()
     {
         var warrior = CreateWarrior(Vector3.zero);
-        var enemy = CreateEnemy(new Vector3(5f, 0f, 0f), 3f);
+        var enemy = CreateEnemy(new Vector3(3f, 0f, 0f), 3f);
         Invoke(warrior.WarriorBrain, "AcquireTarget");
         Assert.AreSame(enemy.Health, warrior.WarriorBrain.Target, "应先锁定目标");
 
@@ -335,7 +335,8 @@ public class InterceptStateTests
     [Test]
     public void WarriorSkipsTargetBeyondLeashBeforeRequestingIntercept()
     {
-        var warrior = CreateWarrior(Vector3.zero);
+        // 用较大的检测范围，把断言聚焦在“拴绳优先于拦截请求”这条规则上。
+        var warrior = CreateWarrior(Vector3.zero, detectRange: 30f);
         warrior.GameObject.transform.position = new Vector3(10f, 0f, 0f);
 
         var enemy = CreateEnemy(new Vector3(20f, 0f, 0f), 3f);
@@ -362,7 +363,76 @@ public class InterceptStateTests
         Assert.AreSame(enemy.Health, warrior.WarriorBrain.Target, "拴绳内的目标应被锁定");
     }
 
-    private UnitRig CreateEnemy(Vector3 position, float attackRange)
+    [Test]
+    public void EnemyChaseThenAttack_UpdatesChaseAndLockPointers()
+    {
+        var enemy = CreateEnemy(Vector3.zero, 3f, interceptEnabled: false);
+        var warrior = CreateWarrior(new Vector3(5f, 0f, 0f), interceptEnabled: false, detectRange: 30f);
+        var pointer = enemy.GameObject.GetComponent<UnitTargetState>();
+        Assert.IsNotNull(pointer);
+
+        Tick(enemy.EnemyBrain);
+
+        Assert.AreSame(warrior.Unit.transform, pointer.ChaseTarget, "追击时应写追逐指针");
+        Assert.IsNull(pointer.LockTarget, "追击时锁定指针应为空");
+
+        warrior.GameObject.transform.position = new Vector3(2f, 0f, 0f);
+        Tick(enemy.EnemyBrain);
+
+        Assert.AreSame(warrior.Unit.transform, pointer.LockTarget, "进入射程后应写锁定指针");
+        Assert.IsNull(pointer.ChaseTarget, "攻击时追逐指针应清空");
+    }
+
+    [Test]
+    public void WarriorOrderMove_LazilyFindsCommanderAddedAfterAwake()
+    {
+        var warrior = CreateWarrior(Vector3.zero, interceptEnabled: false);
+        var enemy = CreateEnemy(new Vector3(20f, 0f, 0f), 3f, interceptEnabled: false);
+
+        // 模拟 SquadRegistry 在 Brain 的 Awake 之后才补挂 UnitCommander：
+        // Brain 必须在 Update 中重新取到它，不能只依赖 Awake 的缓存。
+        var commander = warrior.GameObject.AddComponent<UnitCommander>();
+        commander.IssueMove(enemy.GameObject.transform.position);
+
+        Invoke(warrior.WarriorBrain, "Update");
+
+        Assert.IsTrue(warrior.Locomotion.MoveToCalls > 0, "应按命令移动");
+        Assert.AreEqual("Move", warrior.WarriorBrain.StateName);
+    }
+
+    [Test]
+    public void InterceptDisabled_WarriorDoesNotRequestAndEnemyIgnoresRequest()
+    {
+        // 2026-11-08 计划：拦截默认关闭，双方都按普通索敌运行。
+        var enemy = CreateEnemy(Vector3.zero, 3f, interceptEnabled: false);
+        var goal = CreateGameObject("PatrolGoal", new Vector3(30f, 0f, 0f));
+        enemy.EnemyBrain.SetPatrolGoal(goal.transform);
+
+        var warrior = CreateWarrior(new Vector3(10f, 0f, 0f), interceptEnabled: false, detectRange: 30f);
+
+        int requests = 0;
+        interceptHandler = request =>
+        {
+            if (ReferenceEquals(request.Interceptor, warrior.Unit))
+            {
+                requests++;
+            }
+        };
+        UnitEvents.InterceptRequested += interceptHandler;
+
+        Invoke(warrior.WarriorBrain, "AcquireTarget");
+
+        Assert.AreEqual(0, requests, "拦截关闭时战士不应发起拦截请求");
+        Assert.AreSame(enemy.Health, warrior.WarriorBrain.Target, "拦截关闭时战士仍应正常锁定目标");
+
+        UnitEvents.RaiseInterceptRequested(new InterceptRequest(warrior.Unit, enemy.Health));
+        Tick(enemy.EnemyBrain);
+
+        Assert.IsNull(enemy.EnemyBrain.Target, "拦截关闭时敌人不应转火拦截者");
+        Assert.AreEqual("Patrol", enemy.EnemyBrain.StateName, "拦截关闭时敌人应照常巡逻移动");
+    }
+
+    private UnitRig CreateEnemy(Vector3 position, float attackRange, bool interceptEnabled = true)
     {
         var go = CreateGameObject("Enemy", position);
 
@@ -380,6 +450,7 @@ public class InterceptStateTests
 
         var brain = go.AddComponent<EnemyBrain>();
         brains.Add(brain);
+        SetField(brain, "interceptEnabled", interceptEnabled);
         Invoke(brain, "Awake");
         Invoke(brain, "OnEnable");
 
@@ -394,7 +465,7 @@ public class InterceptStateTests
         };
     }
 
-    private UnitRig CreateWarrior(Vector3 position)
+    private UnitRig CreateWarrior(Vector3 position, bool interceptEnabled = true, float detectRange = 4f)
     {
         var go = CreateGameObject("Warrior", position);
 
@@ -410,6 +481,8 @@ public class InterceptStateTests
 
         var brain = go.AddComponent<WarriorBrain>();
         brains.Add(brain);
+        SetField(brain, "interceptEnabled", interceptEnabled);
+        SetField(brain, "detectRange", detectRange);
         Invoke(brain, "Awake");
         Invoke(brain, "OnEnable");
 

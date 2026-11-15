@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-09T17:16:07Z",
+  "updated_at": "2026-11-15T09:02:00Z",
   "tasks": [
     {
       "id": "unit-face-target",
@@ -290,6 +290,140 @@
         "球体半透明、无 Collider、不参与索敌/贴地探测，开启后控制台 0 error。",
         "关闭后球体全部销毁，无残留对象；重复开关不泄漏。",
         "旧敌人/战士索敌行为不回归（感知字段与旧 acquireRange/detectRange 一致）。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "squad-formation-core",
+      "title": "小队与编队：站位算法 + 小队命令 + 群体行为树",
+      "status": "done",
+      "priority": 1,
+      "source": "新计划.txt#关于群体和编队；YC/小队与编队设计_2026_11_08.md#4",
+      "description": "实现 FormationLayout（Line/Column/Grid 槽位）、Squad/SquadRegistry（成员、槽位、移动/攻击命令、解散）、最小行为树框架与 SquadBrain（Idle/Moving/Engaging）。",
+      "acceptance_criteria": [
+        "FormationLayout 对 Line/Column/Grid 生成恰好 N 个槽位；相邻槽位间距等于 spacing；相对锚点对称；随 facing 旋转；锚点位移时整体平移。",
+        "Squad 编组 N 个单位后每个成员有独立槽位；MoveTo 下发 N 条 Move 命令；解散后命令与 squad_id 清空。",
+        "SquadBrain 无命令无敌人时输出 Idle；有移动命令时输出 Moving；感知内发现敌人时输出 Engaging 并下达攻击命令；目标死亡后回到 Idle。",
+        "成员死亡或离队后自动从 Squad 移除并重排槽位。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "player-rts-commands",
+      "title": "玩家 RTS 操作：框选、右键移动/攻击、编队面板",
+      "status": "done",
+      "priority": 1,
+      "source": "新计划.txt#面向玩家；YC/小队与编队设计_2026_11_08.md#6",
+      "description": "PlayerCommandController（框选、Shift 追加、右键移动/攻击、1-9/Ctrl+1-9）与 SquadPanel（uGUI 面板：显示小队、组建、选择、解散），运行期自动创建。",
+      "acceptance_criteria": [
+        "框选只选中 Player 阵营且带 WarriorBrain 的单位；Shift 追加；点空地清空。",
+        "右键地面为选中单位下发编队移动命令；右键敌人下发集火命令；单位到达或目标死亡后命令自动清空。",
+        "面板列出所有小队的编号、名称、人数与状态，并提供组建/选择/解散操作。",
+        "所有控制器运行期自动创建，不需要修改场景资产。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "unit-target-pointers",
+      "title": "单位数据表增加追逐/锁定单位指针",
+      "status": "done",
+      "priority": 2,
+      "source": "新计划.txt#3.敌人/友军状态机的修改",
+      "description": "为敌人/友军/公民增加 UnitTargetState（ChaseTarget/LockTarget Transform），Brain 在追击/攻击/待命/死亡时维护，开发者表读取。",
+      "acceptance_criteria": [
+        "敌人在追击时 ChaseTarget 为目标、LockTarget 为空；攻击时 LockTarget 为目标、ChaseTarget 为空。",
+        "目标死亡、超距或单位死亡后两个指针都清空。",
+        "战士与公民遵循同一语义；开发者单位表能显示两个指针的名称。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "intercept-militia-perception",
+      "title": "暂时取消拦截 + 民兵感知 10→4",
+      "status": "done",
+      "priority": 2,
+      "source": "新计划.txt#基于现状的一些修改 1/2",
+      "description": "WarriorBrain/EnemyBrain 增加 interceptEnabled 开关并默认关闭；Warrior_Guard 模板与 WarriorBrain.detectRange 改为 4；保留旧拦截实现与测试（显式开启时仍通过）。",
+      "acceptance_criteria": [
+        "默认配置下战士 AcquireTarget 不发出 InterceptRequested；敌人收到拦截请求不改变目标。",
+        "显式 interceptEnabled=true 时原有拦截测试继续通过。",
+        "Warrior_Guard.asset.perceptionRange == 4；WarriorBrain.detectRange 默认 4；验收场景战士实例运行时感知为 4。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "developer-squad-tables",
+      "title": "开发者模式：小队/单位两张全局数据表",
+      "status": "done",
+      "priority": 3,
+      "source": "新计划.txt#开发者模式 1.增加全局数据表-小队",
+      "description": "DeveloperTableData 生成两张表的行数据；DeveloperDataTable 在开发者模式开启时用 F3 切换显示，实时刷新且对已销毁对象安全。",
+      "acceptance_criteria": [
+        "小队表包含 squad_id/name/team/formation/member_count/state/target；单位表包含 name/team/state/chase_target/lock_target/squad_id。",
+        "F3 可显示/隐藏两张表；仅开发者模式开启时可见。",
+        "单位或小队被销毁后表格不抛异常，对应字段显示 -。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "squad-state-machine-doc",
+      "title": "整理敌人/友军/公民/小队状态机文档",
+      "status": "done",
+      "priority": 3,
+      "source": "新计划.txt#最后把状态机整理成易读的模式放在 YC 文件夹里",
+      "description": "在 YC 下输出可读状态机与行为树文档，覆盖取消拦截、追逐/锁定指针、玩家命令优先、编队移动。",
+      "acceptance_criteria": [
+        "文档包含敌人、友军、公民、小队四张状态图/行为树图，与当前代码一致。",
+        "文档明确 ChaseTarget/LockTarget 的写入与清空时机。",
+        "文档记录拦截关闭的恢复方式与民兵感知 4 的影响。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "squad-acceptance-tests",
+      "title": "小队与编队验收：EditMode 测试与编译",
+      "status": "done",
+      "priority": 1,
+      "source": "YC/小队与编队设计_2026_11_08.md#10",
+      "description": "新增 FormationLayoutTests、SquadTests、PlayerCommandTests、TargetPointerTests、DeveloperTableTests；更新感知与拦截相关测试；编译 0 error、全部 EditMode 通过。",
+      "acceptance_criteria": [
+        "新增测试覆盖设计文档第 10 节 1-8 条。",
+        "Warrior_Guard 感知断言更新为 4，InterceptStateTests 在显式开启后通过。",
+        "Unity 编译 0 error / 0 warning；EditMode 全部通过；harness index/validate 通过。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "squad-manual-formation",
+      "title": "编队改为手动 + 自增编号",
+      "status": "done",
+      "priority": 1,
+      "source": ".review/tasks/squad-manual-formation.md",
+      "description": "选择只做选择，右键移动/攻击不得自动建队；G 编队、编号自增；整队选中才走编队命令；个体命令后小队暂停自动接敌。",
+      "acceptance_criteria": [
+        "选择（框选/点选/F1/数字键）不产生任何小队。",
+        "未编队时右键移动：选中单位各自移动并保持相对站位；右键攻击：各自锁定目标。",
+        "当前选择恰好是某小队全部存活成员时，移动走 Squad.MoveTo 队形、攻击走 Squad.Attack 集火。",
+        "G 把当前选择编成新小队，编号由 SquadRegistry.NextId() 自增；Ctrl+1-9 指定编号；1-9 选队；面板按钮与 G 同路径。",
+        "部分选中成员下个体命令后，小队自动接敌不得覆盖该命令（Squad.ManualControl），直到收到整队移动/攻击命令。",
+        "整队改编或全员阵亡后旧小队自动解散，不留 0 人空壳。",
+        "EditMode 覆盖以上语义，且测试会推进 SquadBrain 一帧验证命令未被改写。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "perception-volume-overlap",
+      "title": "感知球重叠变深修复",
+      "status": "done",
+      "priority": 2,
+      "source": "YC/公民与废墟设计_2026_11_10.md#感知球重叠变深修复2026-11-15",
+      "description": "专用 PerceptionVolume shader：模板缓冲保证同一像素只画一层，淡填充 + Fresnel 边缘；材质按阵营共享；找不到 shader 回退 URP Unlit。",
+      "acceptance_criteria": [
+        "多个半透明感知球重叠时透明度不累加。",
+        "Shader.Find 失败时回退旧 URP Unlit 半透明路径，不报错、不消失。",
+        "单层仍可辨认：淡填充 + 更亮的边缘。",
+        "材质按阵营共享，不随单位数量增长。",
+        "shader 在编辑器内编译 0 error（ShaderUtil 证据）。"
       ],
       "blockers": []
     }

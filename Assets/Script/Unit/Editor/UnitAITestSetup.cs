@@ -70,7 +70,7 @@ public static partial class UnitDemoSetup
             WarriorDefinitionPath, "战士", UnitTeam.Player,
             maxHealth: 50f, attack: 5f, moveSpeed: 4f, attackInterval: 2f,
             range: 2f, splashRadius: 0f, canMove: true, canAttack: true,
-            perceptionRange: 10f);
+            perceptionRange: 4f);
 
         var towerDefinition = CreateOrUpdateDefinition(
             TowerDefinitionPath, "箭塔", UnitTeam.Player,

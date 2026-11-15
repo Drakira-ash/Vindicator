@@ -9,7 +9,7 @@ using UnityEngine;
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Unit))]
-public class CitizenBrain : MonoBehaviour, IPerceptionSource
+public class CitizenBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
 {
     private enum State
     {
@@ -28,6 +28,7 @@ public class CitizenBrain : MonoBehaviour, IPerceptionSource
 
     private Unit unit;
     private UnitLocomotion locomotion;
+    private UnitTargetState targets;
     private UnitBuilding buildingTarget;
     private IDamageable target;
     private float searchTimer;
@@ -57,6 +58,7 @@ public class CitizenBrain : MonoBehaviour, IPerceptionSource
     {
         unit = GetComponent<Unit>();
         locomotion = GetComponent<UnitLocomotion>();
+        targets = UnitTargetState.Ensure(gameObject);
 
         if (locomotion == null)
         {
@@ -114,6 +116,7 @@ public class CitizenBrain : MonoBehaviour, IPerceptionSource
         if (target != null && !HasLiveTarget())
         {
             target = null;
+            targets.ClearAll();
         }
 
         if (target != null)
@@ -172,6 +175,9 @@ public class CitizenBrain : MonoBehaviour, IPerceptionSource
         {
             return;
         }
+
+        // 修建/进驻优先级高于索敌：清掉残留的追逐/锁定指针。
+        targets.ClearAll();
 
         float distance = buildingTarget.DistanceTo(transform.position);
 
@@ -256,6 +262,8 @@ public class CitizenBrain : MonoBehaviour, IPerceptionSource
                 locomotion.SetPaused(true);
             }
 
+            targets.SetLock(target.DamageTransform);
+            targets.ClearChase();
             unit.ActivateAbilities(target);
             return;
         }
@@ -263,10 +271,14 @@ public class CitizenBrain : MonoBehaviour, IPerceptionSource
         SetState(State.Chase);
         locomotion.SetPaused(false);
         locomotion.MoveTo(target.DamageTransform.position);
+        targets.SetChase(target.DamageTransform);
+        targets.ClearLock();
     }
 
     private void Idle()
     {
+        targets.ClearAll();
+
         if (state != State.Idle)
         {
             SetState(State.Idle);
@@ -315,6 +327,11 @@ public class CitizenBrain : MonoBehaviour, IPerceptionSource
         enabled = false;
         buildingTarget = null;
         target = null;
+
+        if (targets != null)
+        {
+            targets.ClearAll();
+        }
 
         if (locomotion != null)
         {

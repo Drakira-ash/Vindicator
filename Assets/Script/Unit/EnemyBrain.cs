@@ -9,7 +9,7 @@ using UnityEngine;
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Unit))]
-public class EnemyBrain : MonoBehaviour, IPerceptionSource
+public class EnemyBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
 {
     private enum State
     {
@@ -25,10 +25,14 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
     [SerializeField, Min(0.1f)] private float patrolArriveThreshold = 0.5f;
     [SerializeField, Min(0f)] private float interceptAcceptRange = 12f;
     [SerializeField, Min(0f)] private float interceptLeash = 20f;
+
+    // 2026-11-08 计划暂时关闭拦截：默认不响应友军的拦截请求，按普通索敌运行。
+    [SerializeField] private bool interceptEnabled = false;
     [SerializeField] private bool logState = true;
 
     private Unit unit;
     private UnitLocomotion locomotion;
+    private UnitTargetState targets;
     private IDamageable target;
     private Unit interceptedBy;
     private float searchTimer;
@@ -56,6 +60,7 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
     {
         unit = GetComponent<Unit>();
         locomotion = GetComponent<UnitLocomotion>();
+        targets = UnitTargetState.Ensure(gameObject);
 
         if (locomotion == null)
         {
@@ -102,6 +107,11 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
 
         if (!HasLiveTarget())
         {
+            if (target != null)
+            {
+                targets.ClearAll();
+            }
+
             target = null;
             // 目标（含拦截者）已死亡时一并清掉拦截关系，避免残留状态挡住后续索敌。
             interceptedBy = null;
@@ -177,6 +187,8 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
     /// <summary>原地待命（被拦截但拦截者未进入射程，或目标丢失当帧回到 Idle）。</summary>
     private void Hold()
     {
+        targets.ClearAll();
+
         if (state != State.Idle)
         {
             SetState(State.Idle);
@@ -191,6 +203,8 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
 
     private void Patrol()
     {
+        targets.ClearAll();
+
         if (patrolGoal == null)
         {
             // 没有 AI 巡逻点：退出坐标模式，把移动交还给 locomotion（UnitMover 的路线跟随）。
@@ -242,6 +256,8 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
         SetState(State.Chase);
         locomotion.SetPaused(false);
         locomotion.MoveTo(target.DamageTransform.position);
+        targets.SetChase(target.DamageTransform);
+        targets.ClearLock();
     }
 
     private bool CheckAttack()
@@ -254,6 +270,8 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
 
         SetState(State.Attack);
         locomotion.SetPaused(true);
+        targets.SetLock(target.DamageTransform);
+        targets.ClearChase();
         unit.ActivateAbilities(target);
         return true;
     }
@@ -272,6 +290,12 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
 
     private void OnInterceptRequested(InterceptRequest request)
     {
+        // 2026-11-08 计划暂时关闭敌军的“被拦截”：不转火、不待命，按普通索敌继续。
+        if (!interceptEnabled)
+        {
+            return;
+        }
+
         if (unit == null || unit.Health == null || !unit.Health.IsAlive)
         {
             return;
@@ -398,6 +422,11 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource
         enabled = false;
         target = null;
         interceptedBy = null;
+
+        if (targets != null)
+        {
+            targets.ClearAll();
+        }
 
         if (locomotion != null)
         {

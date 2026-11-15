@@ -1,11 +1,15 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
+using UnityEditor.Rendering;
 using UnityEngine;
 
 /// <summary>
 /// 开发者模式测试：每个可感知单位一个半透明球、半径 = 范围 × 2、无 Collider、
-/// 关闭后全部清理、重复开关不泄漏、死亡单位不再显示。
+/// 关闭后全部清理、重复开关不泄漏、死亡单位不再显示；
+/// 感知球用专用 shader（模板去重，重叠不加深）并同阵营共用材质。
 /// EditMode 下不自动执行 Awake/Update，直接调用 SetEnabled 驱动。
 /// </summary>
 public class DeveloperModeTests
@@ -169,6 +173,74 @@ public class DeveloperModeTests
 
         Assert.IsNull(GameObject.Find("Perception_Mode_A"), "死亡单位的球体应被清理");
         Assert.AreEqual(ExpectedSphereCount(), controller.SphereCount);
+    }
+
+    [Test]
+    public void Spheres_UsePerceptionVolumeShader_AndShareMaterialWithinTeam()
+    {
+        CreateUnit("Mode_A", 3f, UnitTeam.Player);
+        CreateUnit("Mode_B", 4f, UnitTeam.Player);
+        CreateUnit("Mode_C", 5f, UnitTeam.Enemy);
+
+        controller.SetEnabled(true);
+
+        var playerA = SphereRenderer("Mode_A").sharedMaterial;
+        var playerB = SphereRenderer("Mode_B").sharedMaterial;
+        var enemy = SphereRenderer("Mode_C").sharedMaterial;
+
+        Assert.AreSame(playerA, playerB, "同阵营单位应共用一份材质，不逐单位新建");
+        Assert.AreNotSame(playerA, enemy, "不同阵营颜色不同，材质也必须分开");
+
+        var shader = Shader.Find("Vindicator/PerceptionVolume");
+        Assert.IsNotNull(shader, "缺少感知体积 shader：Assets/Resources/Shaders/PerceptionVolume.shader");
+        Assert.AreEqual(shader, playerA.shader, "感知球应使用专用 shader，否则重叠会越叠越深");
+        Assert.Less(playerA.GetColor("_BaseColor").a, 0.3f, "单层填充应足够淡，重叠时才看得见场景");
+        Assert.Greater(playerA.GetColor("_RimColor").a, playerA.GetColor("_BaseColor").a, "边缘应比填充更亮，勾出轮廓");
+    }
+
+    [Test]
+    public void PerceptionVolumeShader_CompilesWithoutErrors()
+    {
+        var shader = Shader.Find("Vindicator/PerceptionVolume");
+        Assert.IsNotNull(shader, "缺少感知体积 shader：Assets/Resources/Shaders/PerceptionVolume.shader");
+        Assert.IsTrue(shader.isSupported, "当前平台不支持感知体积 shader");
+
+        // 真正让 Unity 编译一次，而不是只检查源码字符串。
+        var material = new Material(shader) { hideFlags = HideFlags.DontSave };
+        try
+        {
+            var messages = ShaderUtil.GetShaderMessages(shader);
+            for (int i = 0; i < messages.Length; i++)
+            {
+                if (messages[i].severity == ShaderCompilerMessageSeverity.Error)
+                {
+                    Assert.Fail("感知体积 shader 编译失败：" + messages[i].message);
+                }
+            }
+        }
+        finally
+        {
+            Object.DestroyImmediate(material);
+        }
+    }
+
+    [Test]
+    public void PerceptionVolumeShader_RejectsAlreadyCoveredPixels()
+    {
+        string path = Path.Combine(Application.dataPath, "Resources/Shaders/PerceptionVolume.shader");
+        Assert.IsTrue(File.Exists(path), "缺少 shader 文件: " + path);
+
+        string source = File.ReadAllText(path);
+        StringAssert.Contains("Stencil", source, "shader 必须有模板块");
+        StringAssert.Contains("Comp NotEqual", source, "已画过的像素必须丢弃，重叠才不会累加透明度");
+        StringAssert.Contains("Pass Replace", source, "先画到的球体要写入模板值");
+    }
+
+    private static MeshRenderer SphereRenderer(string unitName)
+    {
+        var sphere = GameObject.Find("Perception_" + unitName);
+        Assert.IsNotNull(sphere, "缺少球体: Perception_" + unitName);
+        return sphere.GetComponent<MeshRenderer>();
     }
 
     private UnitHealth CreateUnit(string name, float range, UnitTeam team)

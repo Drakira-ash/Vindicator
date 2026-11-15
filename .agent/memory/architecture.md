@@ -15,18 +15,26 @@
 | `UnitLocomotion` | 移动后端抽象：`SetPaused` / `MoveTo(worldPos)` / `Stop` / `Halt()`；AI 只依赖该接口。`Stop` 只清坐标目标（`UnitMover` 会退回路线），`Halt` = `Stop` + `SetPaused(true)` 表示真正静止。 |
 | `UnitMotor` | NavMeshAgent 后端：速度每帧取 `StatBlock.MoveSpeed`；攻击时 `isStopped`，恢复后继续寻路；未落在 NavMesh 时 `Warp` 到最近点。 |
 | `UnitMover` | 贴地路点/坐标后端（实现 `UnitLocomotion`）：路点只给水平走向，高度由脚下 `SphereCast` 探测决定；无 route 时可用 `MoveTo` 追坐标。 |
-| `EnemyBrain` | Idle → Patrol → Chase → Attack；每 0.25s 索敌；到达巡逻点 0.5m 内 `Halt` 转 Idle，未配巡逻点则 `Stop` + `SetPaused(false)` 把移动交还路线；目标进入射程则暂停并攻击；接受 `UnitEvents.InterceptRequested` 转火拦截者：拦截者在攻击范围外时进入 Idle 原地待命（`Halt`），进入范围才 Attack。目标丢失/解除拦截当帧先 `Halt` 回 Idle，下一帧再判定。状态机见 `YC/Unit状态机_2026_11_02.md`。 |
-| `WarriorBrain` | Idle → Chase → Attack → Return；检测 10m、拴绳 14m；锁定敌人时发出拦截请求；接战距离取双方射程较小值，超出拴绳放弃目标时发 `InterceptReleased`。 |
+| `EnemyBrain` | Idle → Patrol → Chase → Attack；每 0.25s 索敌；到达巡逻点 0.5m 内 `Halt` 转 Idle，未配巡逻点则 `Stop` + `SetPaused(false)` 把移动交还路线；目标进入射程则暂停并攻击。追击写 `UnitTargetState.ChaseTarget`、攻击写 `LockTarget`，Idle/巡逻/死亡清空。`interceptEnabled` 默认 `false`（2026-11-08 计划暂时取消拦截），关闭时不响应 `InterceptRequested`；开启后恢复旧转火逻辑。目标丢失当帧先 `Halt` 回 Idle，下一帧再判定。状态机见 `YC/单位状态机_2026_11_08.md`。 |
+| `WarriorBrain` | Idle → Move → Chase → Attack → Return；检测 **4m**（2026-11-08 由 10 下调）、拴绳 14m；`UnitCommander.HasOrder` 时玩家命令优先（移动/集火），命令结束后恢复驻守。追击/攻击维护 `ChaseTarget`/`LockTarget`，驻守/返回/死亡清空。`interceptEnabled` 默认 `false`，关闭时只锁定不请求拦截。接战距离取双方射程较小值。 |
 | `UnitEvents` | 全局战斗事件；`InterceptRequested` / `InterceptReleased` 携带拦截者 `Unit` 与被拦截的 `UnitHealth`。 |
 | `UnitSpawner` | 测试用生成器：按间隔生成敌人并设置巡逻终点，出生点吸附 NavMesh。 |
-| `UnitTurretBrain` | 塔 AI：原地索敌与开火；目标走出射程立即清空并重索敌；是否可攻击由 `Unit.abilitiesEnabled` 控制。 |
+| `UnitTurretBrain` | 塔 AI：原地索敌与开火；目标走出射程立即清空并重索敌；攻击时写 `LockTarget`，无目标清空；`StateName` 输出 `Idle/Attack`；是否可攻击由 `Unit.abilitiesEnabled` 控制。 |
 | `HealthBar` | 世界空间跟随血条：`Awake` 在单位外单独建 Background/Fill 双 Quad（无 Collider、Ignore Raycast 层），`LateUpdate` 跟随 `DamageTransform + up * heightOffset` 并 billboard 朝向主相机；订阅 `HealthChanged` 刷新宽度；`SetVisible(bool)` 供废墟隐藏/建成恢复；销毁时清理血条对象。 |
 | `UnitBuilding` | 可修建建筑：`BuildingStatus.Ruined/Operational`；进度 0..`buildRequired`（默认 500）存在运行时实例上；废墟阶段禁用 `UnitHealth`/炮台/能力并隐藏血条，建成后恢复；`Garrison(Unit)` 仅同队且已建成时成功，进驻者运行时销毁（EditMode 下停用）。 |
 | `UnitBuildingRegistry` | 静态建筑注册表；`FindNearestFriendly(..., preferRuined)` 先找废墟、再退回最近建筑。 |
 | `BuildProgressBar` | 废墟建造条：独立跟随对象、双 Quad、无 Collider；订阅 `ProgressChanged`/`Completed`，建成隐藏。 |
-| `CitizenBrain` | Idle → MoveToRepair/Repair / MoveToGarrison / Chase/Attack；Idle 时建筑优先（废墟优先于已建成），无建筑才索敌；按 `Productivity` 每秒推进建造点；建成后立即进驻并销毁自身；死亡停止行为。`Tick(deltaTime)` 公开便于 EditMode 驱动。 |
+| `CitizenBrain` | Idle → MoveToRepair/Repair / MoveToGarrison / Chase/Attack；Idle 时建筑优先（废墟优先于已建成），无建筑才索敌；按 `Productivity` 每秒推进建造点；建成后立即进驻并销毁自身；死亡停止行为。索敌时维护 `ChaseTarget`/`LockTarget`，修建/进驻/Idle/死亡清空。`Tick(deltaTime)` 公开便于 EditMode 驱动。 |
+| `AI/FormationLayout` | 纯函数编队站位：`Line` 一排、`Column` 一列、`Grid` 近似方形；锚点为队形中心，槽位按 `spacing` 对称展开，右方向 = `Cross(up, forward)`；可选 `NavMesh.SamplePosition` 吸附，EditMode 无 NavMesh 时保留原槽位。 |
+| `AI/UnitCommander` | 每单位命令接收器：`SquadId`、`Move`/`Attack` 命令与目标；Brain 读取执行，命令完成/目标死亡后清空。`TryGetAttackTarget` 供 Brain 安全取目标。 |
+| `AI/UnitTargetState` | 单位目标指针数据表：`ChaseTarget`/`LockTarget` 两个 `Transform`，Brain 维护、开发者表只读；销毁对象读取为 null；`Ensure` 自动补挂。 |
+| `AI/Squad` / `SquadRegistry` / `SquadBrain` | 运行期小队：成员、队形、锚点、集火目标；`SquadRegistry` 自动编号/建队/解散（成员被整体移走或全员阵亡后自动 `Disband`，不留 0 人空壳）；`SquadBrain` 行为树 `攻击命令 > 移动命令 > 自动接敌 > Idle`，输出 `Idle/Moving/Engaging`。`Squad.ManualControl`：玩家给部分成员下过个体命令后为 `true`，行为树跳过自动接敌，直到 `MoveTo`/`Attack` 等小队级命令解除——否则集火会覆盖玩家刚下的个体命令。小队不写场景。 |
+| `AI/UnitSelection` | 玩家当前选择（静态列表 + `Changed` 事件），与输入层解耦，EditMode 可直接设置。 |
+| `Player/PlayerCommandController` | RTS 操作：左键框选/点选、Shift 追加、F1 全选、右键移动/攻击、G 编队（编号自增）、1-9 选择小队、Ctrl+1-9 指定编号；运行期自动创建。**默认不编队**：右键移动/攻击只给选中单位下个体命令（移动保持质心相对位置），只有 `SelectionSquad()` 判定"选择恰好覆盖某小队全部存活成员"时才走 `Squad.MoveTo/Attack`；下个体命令前 `DropSquadOrders()` 让所属小队放弃旧命令并 `SetManualControl(true)`（暂停自动接敌，避免集火覆盖个体命令）。框选时绘制选择框、选中单位画绿色标记；判定用 Renderer 屏幕包围盒（无 Renderer 时枢轴 ±8px）；`[Select]` / `[Order]` / `[Squad]` 日志可确认输入与命令是否到达。选择/命令 API 与输入分离，便于 EditMode 驱动。 |
+| `Player/SquadPanel` | uGUI 编队面板：运行期创建 Canvas，显示“已选 N / 可指挥 M”与小队编号/人数/队形/状态，支持组建/选择/解散；Tab 收起。 |
+| `Developer/DeveloperTableData` / `DeveloperDataTable` | F3 开发者数据表：小队表与单位表（含追逐/锁定指针、小队编号）；IMGUI 绘制，仅开发者模式可见，销毁对象显示 `-`。 |
 | `IPerceptionSource` | 统一感知范围来源：`EnemyBrain`/`WarriorBrain`/`CitizenBrain` 优先读 `StatBlock.PerceptionRange`（为 0 时回退各自的序列化字段），`UnitTurretBrain` 返回攻击范围且禁用时为 0。 |
-| `DeveloperMode` / `DeveloperModeController` | F2 开关 + `startEnabled` 初始值（默认 `false`，需在 Inspector 或场景里显式打开）；为所有 `IPerceptionSource` 单位画半透明球（独立对象、无 Collider、Ignore Raycast、按阵营着色）；关闭时清空，无单位的球会被回收。`RuntimeInitializeOnLoadMethod` 自动创建，无需手动放置。编辑模式销毁走 `DestroyImmediate`（`DestroyNow`），运行时走 `Destroy`；`DontDestroyOnLoad` 只在 `Application.isPlaying` 时调用，EditMode 测试可直接驱动 `Awake`。 |
+| `DeveloperMode` / `DeveloperModeController` | F2 开关 + `startEnabled` 初始值（默认 `false`，需在 Inspector 或场景里显式打开）；为所有 `IPerceptionSource` 单位画半透明球（独立对象、无 Collider、Ignore Raycast、按阵营着色）；关闭时清空，无单位的球会被回收。`RuntimeInitializeOnLoadMethod` 自动创建，无需手动放置。编辑模式销毁走 `DestroyImmediate`（`DestroyNow`），运行时走 `Destroy`；`DontDestroyOnLoad` 只在 `Application.isPlaying` 时调用，EditMode 测试可直接驱动 `Awake`。球体材质优先用 `Assets/Resources/Shaders/PerceptionVolume.shader`（模板 `Comp NotEqual`，同一像素只画第一个通过深度测试的球——透明队列按远到近绘制，因此通常是较远的那个；重叠不叠加透明度；填充 0.10 + Fresnel 边缘），找不到 shader 才退回 URP Unlit 半透明；材质按阵营各一份共享。 |
 | `UnitRegistry` | 静态注册表；`FindNearestHostile` 线性搜索。 |
 | `UnitRoute` | 路点序列（Transform 列表）。 |
 | `UnitTeam`, `IDamageable` | 阵营枚举/工具与伤害接口。 |
@@ -41,7 +49,9 @@
 
 建筑/公民路径：`CitizenBrain.Search` → `UnitBuildingRegistry`（同队、`PerceptionRange` 内，废墟优先）→ 走到 `interactRange` 内 → `UnitBuilding.AddBuildProgress(productivity * dt)` → 累计 500 → `Complete`（恢复 `UnitHealth`/炮台/能力、隐藏建造条、切材质）→ 下一帧公民 `Garrison` → 销毁自身。无建筑时才走 `UnitRegistry.FindNearestHostile` 追击/攻击。感知范围经 `IPerceptionSource` 统一暴露，`DeveloperModeController` 只读取它生成可视化球体。
 
-详细实现记录：[YC/Unit实现记录_2026_10_28.md](../../YC/Unit实现记录_2026_10_28.md)、[YC/ToDo_2026_10_29.md](../../YC/ToDo_2026_10_29.md)。设计依据：[YC/Research/README.md](../../YC/Research/README.md)。
+小队/玩家路径：`PlayerCommandController`（框选/右键/热键）→ `UnitSelection` → `SquadRegistry`/`Squad`（站位 `FormationLayout`）→ `UnitCommander.IssueMove/IssueAttack` → 成员 Brain 的 `ExecuteOrder` → `UnitLocomotion`/`UnitAbility`。Brain 在追击/攻击时写 `UnitTargetState`，`SquadBrain` 行为树每帧输出 `Idle/Moving/Engaging`，`DeveloperTableData` 只读两张表供 F3 展示。
+
+详细实现记录：[YC/Unit实现记录_2026_10_28.md](../../YC/Unit实现记录_2026_10_28.md)、[YC/ToDo_2026_10_29.md](../../YC/ToDo_2026_10_29.md)、[YC/单位状态机_2026_11_08.md](../../YC/单位状态机_2026_11_08.md)。设计依据：[YC/Research/README.md](../../YC/Research/README.md)。
 
 ## 2. 路网系统（`Assets/Script/TDWorkflow/`）
 
@@ -91,6 +101,8 @@
 14. **建造进度存在 `UnitBuilding` 实例，不写回 `UnitDefinition`**：中断（公民死亡/离开）后进度保留；判定用水平距离 `UnitBuilding.DistanceTo` 与 `interactRange`（默认 1.5），不要用 3D 距离。
 15. **公民 Idle 决策顺序固定**：废墟 > 已建成建筑 > 敌人 > Idle。建筑存在时不索敌；废墟优先于已建成建筑（`preferRuined`）。
 16. **开发者模式球体是纯展示对象**：独立 GameObject、无 Collider、Ignore Raycast 层；只读 `IPerceptionSource.PerceptionRange`，不得参与索敌/贴地探测。关闭时清空全部球体，重复开关不泄漏。`CitizenBrain.Tick(deltaTime)` 公开仅为 EditMode 可驱动，运行时仍由 `Update` 调用。
+17. **追逐/锁定指针互斥，玩家命令优先于个体 AI**：追击只写 `ChaseTarget` 并清 `LockTarget`，攻击只写 `LockTarget` 并清 `ChaseTarget`，待命/死亡都清空。`UnitCommander.HasOrder` 为真时 Brain 必须先执行命令，不得自行索敌；命令完成或目标死亡后命令自动清空并恢复个体行为。
+18. **拦截默认关闭但代码保留**：`WarriorBrain.interceptEnabled` 与 `EnemyBrain.interceptEnabled` 默认 `false`；恢复旧拦截行为只改开关，不要删除 `UnitEvents` 事件链或测试。
 
 ## 5. 资产关系（概览）
 
