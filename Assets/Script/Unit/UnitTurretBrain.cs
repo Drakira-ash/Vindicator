@@ -5,7 +5,7 @@ using UnityEngine;
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Unit))]
-public class UnitTurretBrain : MonoBehaviour
+public class UnitTurretBrain : MonoBehaviour, IPerceptionSource
 {
     [SerializeField, Min(0.05f)] private float searchInterval = 0.25f;
 
@@ -15,6 +15,20 @@ public class UnitTurretBrain : MonoBehaviour
 
     /// <summary>当前目标。</summary>
     public IDamageable Target => target;
+
+    /// <summary>炮台没有独立感知；开发者模式显示其攻击范围，禁用时返回 0。</summary>
+    public float PerceptionRange
+    {
+        get
+        {
+            if (!isActiveAndEnabled || unit == null || unit.Health == null || !unit.Health.IsAlive)
+            {
+                return 0f;
+            }
+
+            return unit.GetAttackRange();
+        }
+    }
 
     private void Awake()
     {

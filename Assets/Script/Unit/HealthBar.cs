@@ -69,7 +69,16 @@ public class HealthBar : MonoBehaviour
 
         if (barObject != null)
         {
-            Destroy(barObject);
+            // 编辑模式（含 EditMode 测试）下 Destroy 不生效并报错，改用 DestroyImmediate。
+            if (Application.isPlaying)
+            {
+                Destroy(barObject);
+            }
+            else
+            {
+                DestroyImmediate(barObject);
+            }
+
             barObject = null;
         }
     }
@@ -115,7 +124,8 @@ public class HealthBar : MonoBehaviour
         fillTransform.localPosition = new Vector3(-(width - fillWidth) * 0.5f, 0f, -0.01f);
     }
 
-    private void SetVisible(bool visible)
+    /// <summary>显示/隐藏血条；废墟建筑用它隐藏血条。</summary>
+    public void SetVisible(bool visible)
     {
         if (barObject != null && barObject.activeSelf != visible)
         {

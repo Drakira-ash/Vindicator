@@ -10,6 +10,6 @@ public static partial class UnitDemoSetup
     [MenuItem("Tools/Unit/Create Projectile Test Scene", false, 12)]
     public static void CreateProjectileTestScene()
     {
-        BuildAITestScene(true);
+        BuildAITestScene(TowerSetup.Projectile);
     }
 }

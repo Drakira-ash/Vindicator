@@ -1,14 +1,15 @@
 using UnityEngine;
 
 /// <summary>
-/// 敌人行为：无目标时前往巡逻点，到达后在原地待命（Idle）；发现附近敌对目标后追击，
-/// 进入射程后停下攻击；目标死亡后重新搜索最近的敌人。被友军拦截时
-/// （<see cref="UnitEvents.InterceptRequested"/>）把攻击目标切换为拦截者，
+/// 敌人行为：目标丢失时先回到 Idle，下一帧立即进入新一轮判定（无目标则朝终点/巡逻点移动）；
+/// 发现附近敌对目标后追击，进入射程后停下攻击；目标死亡后重新搜索最近的敌人。被友军拦截时
+/// （<see cref="UnitEvents.InterceptRequested"/>）把攻击目标切换为拦截者：
+/// 拦截者进入攻击范围才攻击，否则原地待命（Idle）不再移动；
 /// 拦截者死亡或距离过远后解除。
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Unit))]
-public class EnemyBrain : MonoBehaviour
+public class EnemyBrain : MonoBehaviour, IPerceptionSource
 {
     private enum State
     {
@@ -32,12 +33,24 @@ public class EnemyBrain : MonoBehaviour
     private Unit interceptedBy;
     private float searchTimer;
     private State state = (State)(-1);
+    private bool forceIdleFrame;
+    private bool reevaluateNext;
 
     /// <summary>当前目标，便于调试与测试断言。</summary>
     public IDamageable Target => target;
 
     /// <summary>当前状态名，便于调试与测试断言。</summary>
     public string StateName => state.ToString();
+
+    /// <summary>感知范围：优先读模板属性，未配置时回退到序列化字段。</summary>
+    public float PerceptionRange
+    {
+        get
+        {
+            float stat = unit != null ? unit.Stats.Get(StatType.PerceptionRange) : 0f;
+            return stat > 0f ? stat : acquireRange;
+        }
+    }
 
     private void Awake()
     {
@@ -58,6 +71,7 @@ public class EnemyBrain : MonoBehaviour
         }
 
         UnitEvents.InterceptRequested += OnInterceptRequested;
+        UnitEvents.InterceptReleased += OnInterceptReleased;
     }
 
     private void OnDisable()
@@ -68,6 +82,7 @@ public class EnemyBrain : MonoBehaviour
         }
 
         UnitEvents.InterceptRequested -= OnInterceptRequested;
+        UnitEvents.InterceptReleased -= OnInterceptReleased;
     }
 
     /// <summary>由生成器在实例化后设置，决定无目标时的去向。</summary>
@@ -83,9 +98,13 @@ public class EnemyBrain : MonoBehaviour
             return;
         }
 
+        bool hadTarget = target != null;
+
         if (!HasLiveTarget())
         {
             target = null;
+            // 目标（含拦截者）已死亡时一并清掉拦截关系，避免残留状态挡住后续索敌。
+            interceptedBy = null;
         }
 
         if (target == null)
@@ -100,13 +119,50 @@ public class EnemyBrain : MonoBehaviour
 
         if (target == null)
         {
+            // 上一帧已回到 Idle：现在从 Idle 进入下一轮判定。
+            if (reevaluateNext)
+            {
+                reevaluateNext = false;
+                Patrol();
+                return;
+            }
+
+            // 刚丢失目标或收到拦截解除：先回到 Idle 停留一帧，
+            // 下一帧再从 Idle 进入新一轮判定（仍无目标则朝终点移动）。
+            if (hadTarget || forceIdleFrame)
+            {
+                forceIdleFrame = false;
+                Hold();
+                reevaluateNext = true;
+                return;
+            }
+
+            // 尚未接战：按配置朝终点（巡逻点）移动。
             Patrol();
             return;
         }
 
+        forceIdleFrame = false;
+        reevaluateNext = false;
+
         if (!ValidateIntercept())
         {
+            // 超距解除拦截：本帧回到 Idle，下一帧从 Idle 进入新一轮判定。
             target = null;
+            Hold();
+            reevaluateNext = true;
+            return;
+        }
+
+        if (interceptedBy != null)
+        {
+            // 被拦截：拦截者在攻击范围内才攻击；否则原地待命，不再朝拦截者移动。
+            if (CheckAttack())
+            {
+                return;
+            }
+
+            Hold();
             return;
         }
 
@@ -118,14 +174,47 @@ public class EnemyBrain : MonoBehaviour
         Chase();
     }
 
+    /// <summary>原地待命（被拦截但拦截者未进入射程，或目标丢失当帧回到 Idle）。</summary>
+    private void Hold()
+    {
+        if (state != State.Idle)
+        {
+            SetState(State.Idle);
+            locomotion.Halt();
+        }
+        else
+        {
+            // UnitMover.Stop() 只清目标、不暂停路线跟随，必须同时暂停移动器。
+            locomotion.SetPaused(true);
+        }
+    }
+
     private void Patrol()
     {
-        if (patrolGoal == null || DistanceToPatrolGoal() <= patrolArriveThreshold)
+        if (patrolGoal == null)
         {
+            // 没有 AI 巡逻点：退出坐标模式，把移动交还给 locomotion（UnitMover 的路线跟随）。
             if (state != State.Idle)
             {
                 SetState(State.Idle);
                 locomotion.Stop();
+            }
+
+            locomotion.SetPaused(false);
+            return;
+        }
+
+        if (DistanceToPatrolGoal() <= patrolArriveThreshold)
+        {
+            // 已到达终点：真正停下（UnitMover 的 Stop 会退回路线，必须同时暂停）。
+            if (state != State.Idle)
+            {
+                SetState(State.Idle);
+                locomotion.Halt();
+            }
+            else
+            {
+                locomotion.SetPaused(true);
             }
 
             return;
@@ -171,7 +260,7 @@ public class EnemyBrain : MonoBehaviour
 
     private void AcquireTarget()
     {
-        var candidate = UnitRegistry.FindNearestHostile(transform.position, unit.Team, acquireRange);
+        var candidate = UnitRegistry.FindNearestHostile(transform.position, unit.Team, PerceptionRange);
         if (candidate == null)
         {
             return;
@@ -219,6 +308,28 @@ public class EnemyBrain : MonoBehaviour
         target = interceptor.Health;
         searchTimer = searchInterval;
         Log(string.Format("[Intercept] {0} 接受 {1} 的拦截，改为攻击 {1}", name, interceptor.name));
+    }
+
+    /// <summary>拦截者主动放弃追击时解除拦截，避免敌人被留在原地永久待命。</summary>
+    private void OnInterceptReleased(InterceptRequest request)
+    {
+        if (unit == null || unit.Health == null || interceptedBy == null)
+        {
+            return;
+        }
+
+        if (!ReferenceEquals(request.Interceptor, interceptedBy) ||
+            !ReferenceEquals(request.Target, unit.Health))
+        {
+            return;
+        }
+
+        Log(string.Format("[Intercept] {0} 因 {1} 放弃追击而解除拦截", name, interceptedBy.name));
+        interceptedBy = null;
+        target = null;
+        searchTimer = searchInterval;
+        // 下一次 Update 先回到 Idle，再进入新一轮判定。
+        forceIdleFrame = true;
     }
 
     /// <summary>拦截后持续校验拦截者；死亡或拉出过远距离时解除，交回常规索敌。</summary>
@@ -290,7 +401,7 @@ public class EnemyBrain : MonoBehaviour
 
         if (locomotion != null)
         {
-            locomotion.Stop();
+            locomotion.Halt();
         }
     }
 }

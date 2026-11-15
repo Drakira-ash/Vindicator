@@ -114,7 +114,8 @@ public class AttackAbility : UnitAbility
 
     private void ApplyHit(IDamageable target, float damage, float splash)
     {
-        if (Owner == null || !IsAliveTarget(target))
+        // 起手延迟期间 Owner 可能已死亡：死亡单位不应再结算已起手的伤害。
+        if (Owner == null || Owner.Health == null || !Owner.Health.IsAlive || !IsAliveTarget(target))
         {
             return;
         }

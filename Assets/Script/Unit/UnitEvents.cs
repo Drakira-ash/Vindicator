@@ -26,8 +26,16 @@ public static class UnitEvents
     /// <summary>友军尝试拦截敌人时触发。</summary>
     public static event Action<InterceptRequest> InterceptRequested;
 
+    /// <summary>友军放弃拦截时触发（目标超出拴绳等），避免被拦截方永久待命。</summary>
+    public static event Action<InterceptRequest> InterceptReleased;
+
     public static void RaiseInterceptRequested(InterceptRequest request)
     {
         InterceptRequested?.Invoke(request);
+    }
+
+    public static void RaiseInterceptReleased(InterceptRequest request)
+    {
+        InterceptReleased?.Invoke(request);
     }
 }

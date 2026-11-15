@@ -1,12 +1,13 @@
 using UnityEngine;
 
 /// <summary>
-/// 战士行为：驻守原地，敌对单位进入检测范围后发起拦截请求并追击，
+/// 战士行为：驻守原地，敌对单位进入检测范围且仍在拴绳内时发起拦截请求并追击，
 /// 进入攻击范围后停下攻击；目标死亡或超出拴绳距离时返回驻守点。
+/// 发请求前先判拴绳：超出拴绳的目标下一帧就会被释放，会造成反复拦截/释放的抖动。
 /// </summary>
 [DisallowMultipleComponent]
 [RequireComponent(typeof(Unit))]
-public class WarriorBrain : MonoBehaviour
+public class WarriorBrain : MonoBehaviour, IPerceptionSource
 {
     private enum State
     {
@@ -34,6 +35,16 @@ public class WarriorBrain : MonoBehaviour
 
     /// <summary>当前状态名，便于调试与测试断言。</summary>
     public string StateName => state.ToString();
+
+    /// <summary>感知范围：优先读模板属性，未配置时回退到序列化字段。</summary>
+    public float PerceptionRange
+    {
+        get
+        {
+            float stat = unit != null ? unit.Stats.Get(StatType.PerceptionRange) : 0f;
+            return stat > 0f ? stat : detectRange;
+        }
+    }
 
     private void Awake()
     {
@@ -78,6 +89,12 @@ public class WarriorBrain : MonoBehaviour
         if (target != null && IsBeyondLeash())
         {
             Log(string.Format("[Warrior] {0} 目标 {1} 超出拴绳，放弃追击", name, target.DamageTransform.name));
+            var health = target as UnitHealth;
+            if (health != null)
+            {
+                UnitEvents.RaiseInterceptReleased(new InterceptRequest(unit, health));
+            }
+
             target = null;
         }
 
@@ -107,8 +124,14 @@ public class WarriorBrain : MonoBehaviour
 
     private void AcquireTarget()
     {
-        var candidate = UnitRegistry.FindNearestHostile(transform.position, unit.Team, detectRange);
+        var candidate = UnitRegistry.FindNearestHostile(transform.position, unit.Team, PerceptionRange);
         if (candidate == null)
+        {
+            return;
+        }
+
+        // 先判拴绳再发拦截请求，避免“请求 -> 下一帧超绳释放 -> 再请求”的抖动。
+        if (DistanceToGuard(candidate) > leashRange)
         {
             return;
         }
@@ -127,7 +150,7 @@ public class WarriorBrain : MonoBehaviour
 
     private bool CheckAttack()
     {
-        float range = unit.GetAttackRange();
+        float range = EngagedAttackRange();
         if (range <= 0f || target.DistanceTo(transform.position) > range)
         {
             return false;
@@ -137,6 +160,29 @@ public class WarriorBrain : MonoBehaviour
         locomotion.SetPaused(true);
         unit.ActivateAbilities(target);
         return true;
+    }
+
+    /// <summary>
+    /// 接战距离取双方射程的较小者：目标射程更短时继续逼近，否则会停在目标打不到的位置。
+    /// 被拦截的敌人会原地待命，若战士只按自己的射程停下，敌人将永远够不到战士。
+    /// 目标射程更长或目标不是 Unit 时按自身射程处理。
+    /// </summary>
+    private float EngagedAttackRange()
+    {
+        float range = unit.GetAttackRange();
+        if (range <= 0f || target == null)
+        {
+            return range;
+        }
+
+        var targetUnit = target.DamageTransform.GetComponentInParent<Unit>();
+        if (targetUnit == null)
+        {
+            return range;
+        }
+
+        float targetRange = targetUnit.GetAttackRange();
+        return targetRange > 0f ? Mathf.Min(range, targetRange) : range;
     }
 
     private void Guard()
@@ -155,14 +201,22 @@ public class WarriorBrain : MonoBehaviour
         if (state != State.Idle)
         {
             SetState(State.Idle);
-            locomotion.Stop();
+            locomotion.Halt();
+        }
+        else
+        {
+            locomotion.SetPaused(true);
         }
     }
 
     private bool IsBeyondLeash()
     {
-        float distance = target.DistanceTo(guardPosition);
-        return distance > leashRange;
+        return DistanceToGuard(target) > leashRange;
+    }
+
+    private float DistanceToGuard(IDamageable candidate)
+    {
+        return candidate.DistanceTo(guardPosition);
     }
 
     private bool HasLiveTarget()
@@ -207,7 +261,7 @@ public class WarriorBrain : MonoBehaviour
 
         if (locomotion != null)
         {
-            locomotion.Stop();
+            locomotion.Halt();
         }
     }
 }

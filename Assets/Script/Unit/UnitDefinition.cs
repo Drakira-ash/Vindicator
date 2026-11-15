@@ -18,6 +18,10 @@ public class UnitDefinition : ScriptableObject
     [Min(0f)] public float range = 1.5f;
     [Min(0f)] public float splashRadius = 0f;
 
+    [Header("感知与生产")]
+    [Min(0f)] public float perceptionRange = 0f;
+    [Min(0f)] public float productivity = 0f;
+
     [Header("行为开关")]
     public bool canMove = true;
     public bool canAttack = true;

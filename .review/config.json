@@ -13,8 +13,23 @@
       "required": true,
       "timeout": 120,
       "command": "python ../../../.agent/scripts/agent.py unity-verify --status"
+    },
+    {
+      "name": "harness-index",
+      "kind": "test",
+      "required": true,
+      "timeout": 120,
+      "command": "python ../../../.agent/scripts/agent.py index"
+    },
+    {
+      "name": "harness-validate",
+      "kind": "test",
+      "required": false,
+      "timeout": 120,
+      "command": "python ../../../.agent/scripts/agent.py validate"
     }
   ],
+  "env_allow": ["SYSTEMROOT"],
   "reviewer_scripts": {
     "enabled": true,
     "interpreters": ["python"],

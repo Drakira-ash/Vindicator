@@ -12,7 +12,9 @@ public enum StatType
     MoveSpeed,
     AttackInterval,
     Range,
-    SplashRadius
+    SplashRadius,
+    PerceptionRange,
+    Productivity
 }
 
 /// <summary>
