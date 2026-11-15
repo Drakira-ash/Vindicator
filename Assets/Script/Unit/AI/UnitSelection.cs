@@ -3,8 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// 玩家当前选择。只保存存活的可指挥单位，变化时广播事件供面板刷新。
-/// 与输入层解耦，EditMode 可直接设置选择后测试命令下发。
+/// 玩家当前选择。只保存存活单位（开发者模式下可包含敌人，用于编辑/销毁），
+/// 变化时广播事件供面板刷新。与输入层解耦，EditMode 可直接设置选择后测试命令下发。
 /// </summary>
 public static class UnitSelection
 {

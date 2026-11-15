@@ -58,6 +58,7 @@ public class PlayerCommandController : MonoBehaviour
 
         instance = this;
         cam = Camera.main;
+        DeveloperMode.Changed += OnDeveloperModeChanged;
 
         if (Application.isPlaying)
         {
@@ -67,9 +68,45 @@ public class PlayerCommandController : MonoBehaviour
 
     private void OnDestroy()
     {
+        DeveloperMode.Changed -= OnDeveloperModeChanged;
+
         if (instance == this)
         {
             instance = null;
+        }
+    }
+
+    /// <summary>
+    /// 关闭开发者模式时把“仅因编辑而选中的敌人”移出选择：
+    /// 否则敌人会继续带着选择框，但 K 和右键命令都已不可用。
+    /// </summary>
+    private static void OnDeveloperModeChanged(bool enabled)
+    {
+        if (enabled)
+        {
+            return;
+        }
+
+        var selected = UnitSelection.All;
+        var keep = new List<Unit>(selected.Count);
+        bool dropped = false;
+
+        for (int i = 0; i < selected.Count; i++)
+        {
+            var unit = selected[i];
+            if (IsCommandable(unit))
+            {
+                keep.Add(unit);
+            }
+            else
+            {
+                dropped = true;
+            }
+        }
+
+        if (dropped)
+        {
+            UnitSelection.Set(keep);
         }
     }
 
@@ -87,7 +124,10 @@ public class PlayerCommandController : MonoBehaviour
 #endif
     }
 
-    /// <summary>替换/追加选择；只接受存活的可指挥友军。</summary>
+    /// <summary>
+    /// 替换/追加选择；普通模式下只接受存活的可指挥友军，
+    /// 开发者模式下任意存活单位（含敌人）都可选中以便编辑。
+    /// </summary>
     public void SelectUnits(IEnumerable<Unit> units, bool additive = false)
     {
         var filtered = new List<Unit>();
@@ -119,7 +159,7 @@ public class PlayerCommandController : MonoBehaviour
     public bool IssueMoveCommand(Vector3 point, Vector3 forward)
     {
         UnitSelection.Prune();
-        var units = AliveSelection();
+        var units = AliveCommandableSelection();
         if (units.Count == 0)
         {
             return false;
@@ -149,7 +189,7 @@ public class PlayerCommandController : MonoBehaviour
             return false;
         }
 
-        var units = AliveSelection();
+        var units = AliveCommandableSelection();
         if (units.Count == 0)
         {
             return false;
@@ -179,7 +219,7 @@ public class PlayerCommandController : MonoBehaviour
     /// </summary>
     public Squad SelectionSquad()
     {
-        var units = AliveSelection();
+        var units = AliveCommandableSelection();
         if (units.Count == 0)
         {
             return null;
@@ -234,7 +274,7 @@ public class PlayerCommandController : MonoBehaviour
     public bool CreateSquadFromSelection(int squadId)
     {
         UnitSelection.Prune();
-        var units = AliveSelection();
+        var units = AliveCommandableSelection();
         if (units.Count == 0)
         {
             Log("[Squad] 没有可编队的单位（先框选士兵）");
@@ -321,15 +361,18 @@ public class PlayerCommandController : MonoBehaviour
         }
     }
 
-    /// <summary>当前选择中的存活单位快照。</summary>
-    private static List<Unit> AliveSelection()
+    /// <summary>
+    /// 当前选择中可接受玩家命令的单位快照。
+    /// 开发者模式下敌人也能被选中，但命令只作用于友军战士。
+    /// </summary>
+    private static List<Unit> AliveCommandableSelection()
     {
         var result = new List<Unit>(UnitSelection.Count);
         var selected = UnitSelection.All;
         for (int i = 0; i < selected.Count; i++)
         {
             var unit = selected[i];
-            if (unit != null && unit.Health != null && unit.Health.IsAlive)
+            if (IsCommandable(unit))
             {
                 result.Add(unit);
             }
@@ -352,7 +395,7 @@ public class PlayerCommandController : MonoBehaviour
             }
 
             var unit = health.GetComponent<Unit>();
-            if (IsSelectable(unit))
+            if (IsCommandable(unit))
             {
                 available.Add(unit);
             }
@@ -365,8 +408,25 @@ public class PlayerCommandController : MonoBehaviour
         return UnitSelection.Count;
     }
 
-    /// <summary>判断单位是否可被玩家选中：存活、Player 阵营、带 WarriorBrain。</summary>
+    /// <summary>
+    /// 判断单位是否可被玩家选中：普通模式下为存活、Player 阵营、带 WarriorBrain；
+    /// 开发者模式下任意存活单位（含敌人）都可选中，便于查看与按 K 销毁。
+    /// </summary>
     public static bool IsSelectable(Unit unit)
+    {
+        if (IsCommandable(unit))
+        {
+            return true;
+        }
+
+        return DeveloperMode.Enabled &&
+               unit != null &&
+               unit.Health != null &&
+               unit.Health.IsAlive;
+    }
+
+    /// <summary>判断单位是否可接受玩家命令：存活、Player 阵营、带 WarriorBrain。</summary>
+    public static bool IsCommandable(Unit unit)
     {
         return unit != null &&
                unit.Health != null &&
@@ -494,7 +554,7 @@ public class PlayerCommandController : MonoBehaviour
         {
             if (PointerOverUi())
             {
-                Log("[Select] 鼠标按下位置在 UI 上，已忽略框选（可按 Tab 收起面板）");
+                Log("[Select] 鼠标在 UI / 开发者放置模式上，已忽略框选");
                 return;
             }
 
@@ -731,7 +791,13 @@ public class PlayerCommandController : MonoBehaviour
 
     private static bool PointerOverUi()
     {
-        return EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+        {
+            return true;
+        }
+
+        // 开发者面板是 IMGUI，不经过 EventSystem；放置模式下左键也要留给放置而不是框选。
+        return DeveloperSpawnController.BlocksWorldInput(Input.mousePosition);
     }
 
     private static void DestroyNow(UnityEngine.Object target)

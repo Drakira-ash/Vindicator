@@ -43,6 +43,9 @@ public class EnemyBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
     /// <summary>当前目标，便于调试与测试断言。</summary>
     public IDamageable Target => target;
 
+    /// <summary>无索敌目标时的巡逻终点；开发者模式生成敌人时复用它。</summary>
+    public Transform PatrolGoal => patrolGoal;
+
     /// <summary>当前状态名，便于调试与测试断言。</summary>
     public string StateName => state.ToString();
 

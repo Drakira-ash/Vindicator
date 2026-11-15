@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-15T09:02:00Z",
+  "updated_at": "2026-11-15T09:59:00Z",
   "tasks": [
     {
       "id": "unit-face-target",
@@ -424,6 +424,42 @@
         "单层仍可辨认：淡填充 + 更亮的边缘。",
         "材质按阵营共享，不随单位数量增长。",
         "shader 在编辑器内编译 0 error（ShaderUtil 证据）。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "developer-unit-spawn",
+      "title": "开发者模式：单位生成与销毁",
+      "status": "done",
+      "priority": 1,
+      "source": ".review/tasks/developer-unit-spawn.md",
+      "description": "开发者模式内按 K 销毁选中单位、按 S/D 在鼠标位置生成民兵/普通敌人；提供可展开/收回的生成面板（按阵营预览、任意位置放置、逐个销毁）。",
+      "acceptance_criteria": [
+        "按 ~ 进入/退出开发者模式（F2 保留为别名）；非开发者模式下生成/销毁热键无效。",
+        "开发者模式下 K 销毁当前点选/框选中的单位，选择随之清空。",
+        "S 在鼠标位置生成民兵，D 在鼠标位置生成普通敌人/劫匪；生成点优先吸附 NavMesh，失败时使用鼠标射线命中点。",
+        "可展开/收回的 UI 面板按我方/敌方列出可生成单位类型，选中类型后在任意位置左键放置（带鼠标预览，右键/Esc 取消）。",
+        "面板列出场上所有单位（含敌人）并可逐个销毁；销毁选中与面板销毁走同一 API。",
+        "面板及放置模式不干扰 RTS 框选与右键命令（鼠标在面板上或放置中时不吃世界输入）。",
+        "测试场景手动验收：先销毁在场现存民兵，再用销毁/生成操作让玩家方赢得本场袭击。",
+        "EditMode 测试覆盖：目录解析、生成阵营与组件、任意位置生成、销毁选中、销毁任意单位、面板开关状态。",
+        "Unity 编译 0 error / 0 warning，EditMode 全通过；harness index/validate 通过；新增资产有配对 .meta。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "developer-mode-enemy-edit",
+      "title": "开发者模式：敌人可选/可销毁，生成敌人会前进",
+      "status": "done",
+      "priority": 1,
+      "source": ".review/tasks/developer-mode-enemy-edit.md",
+      "description": "修复开发者模式下敌人无法点选/框选与销毁的问题，并让 S/D 或面板生成的敌人像原场景敌人一样朝巡逻目标前进；敌人仍不接受玩家移动/攻击命令。",
+      "acceptance_criteria": [
+        "开发者模式下点选/框选可选中任意存活单位（含敌人），K 能销毁选中的敌人；关闭开发者模式后选择恢复为仅友军战士。",
+        "开发者模式下选中的敌人不会接受右键移动/攻击命令，也不会被编入小队。",
+        "S/D 或面板生成敌人时，若场景存在 UnitSpawner 或已有敌人的巡逻目标，则新敌人继承该目标并在无索敌目标时朝其移动。",
+        "EditMode 测试覆盖：开发者模式下敌人可选、可被 K 销毁、命令过滤、生成敌人获得巡逻目标。",
+        "Unity 编译 0 error / 0 warning，EditMode 全通过；harness validate 通过。"
       ],
       "blockers": []
     }

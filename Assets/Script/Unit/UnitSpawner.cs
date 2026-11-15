@@ -16,6 +16,9 @@ public class UnitSpawner : MonoBehaviour
     [SerializeField] private Transform patrolGoal;
     [SerializeField] private bool logSpawns = true;
 
+    /// <summary>生成器给敌人指定的巡逻终点；开发者模式生成敌人时复用它。</summary>
+    public Transform PatrolGoal => patrolGoal;
+
     private IEnumerator Start()
     {
         if (unitPrefab == null)

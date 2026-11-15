@@ -15,6 +15,9 @@ public class DeveloperModeController : MonoBehaviour
 
     [SerializeField] private bool startEnabled = false;
     [SerializeField] private KeyCode toggleKey = KeyCode.F2;
+
+    // 新计划约定用 `~` 进入开发者模式；F2 保留为旧别名。
+    [SerializeField] private KeyCode alternateToggleKey = KeyCode.BackQuote;
     [SerializeField] private Color playerColor = new Color(0.2f, 0.6f, 1f);
     [SerializeField] private Color enemyColor = new Color(1f, 0.25f, 0.2f);
     [SerializeField] private Color neutralColor = new Color(0.85f, 0.85f, 0.2f);
@@ -91,7 +94,7 @@ public class DeveloperModeController : MonoBehaviour
     private void Update()
     {
 #if ENABLE_LEGACY_INPUT_MANAGER
-        if (Input.GetKeyDown(toggleKey))
+        if (Input.GetKeyDown(toggleKey) || Input.GetKeyDown(alternateToggleKey))
         {
             Toggle();
         }
