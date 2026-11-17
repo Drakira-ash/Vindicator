@@ -17,10 +17,15 @@ namespace Vindicator.UI
 
         private UnitHealth health;
         private Unit unit;
+        private UnitCommander commander;
         private float cachedRadius;
         private bool radiusResolved;
 
-        public Transform Transform => transform;
+        /// <summary>
+        /// 单位根节点。对象已被销毁时返回 null —— 选择集合可能跨帧持有本组件，
+        /// 直接读 transform 会抛 MissingReferenceException。
+        /// </summary>
+        public Transform Transform => this != null ? transform : null;
 
         /// <summary>
         /// 阵营。按优先级取权威来源，避免时序窗口读到过期数据：
@@ -49,7 +54,8 @@ namespace Vindicator.UI
             }
         }
 
-        public bool IsSelectable => health != null && health.IsAlive && isActiveAndEnabled;
+        public bool IsSelectable =>
+            this != null && health != null && health.IsAlive && isActiveAndEnabled;
 
         public string DisplayName
         {
@@ -87,6 +93,40 @@ namespace Vindicator.UI
             {
                 EnsureReferences();
                 return health;
+            }
+        }
+
+        /// <summary>底层单位，选择桥把 UI 选择同步给 UnitSelection 时使用。</summary>
+        public Unit Unit
+        {
+            get
+            {
+                EnsureReferences();
+                return unit;
+            }
+        }
+
+        /// <summary>所属小队编号；未编队返回 -1。懒查找，不在 getter 里创建组件。</summary>
+        public int SquadId
+        {
+            get
+            {
+                if (commander == null)
+                {
+                    commander = GetComponent<UnitCommander>();
+                }
+
+                return commander != null ? commander.SquadId : -1;
+            }
+        }
+
+        /// <summary>所属小队；未编队或小队已解散返回 null。</summary>
+        public Squad Squad
+        {
+            get
+            {
+                int id = SquadId;
+                return id >= 0 ? SquadRegistry.Find(id) : null;
             }
         }
 

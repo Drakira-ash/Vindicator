@@ -114,8 +114,10 @@ namespace Vindicator.UI
 
             if (enableCancelInput)
             {
-                bool cancelPressed = mouse.rightButton.wasPressedThisFrame
-                    || (Keyboard.current != null && Keyboard.current.escapeKey.wasPressedThisFrame);
+                // 右键留给 PlayerCommandController 下移动/攻击命令，不再清空选择；
+                // 只有 Esc 取消当前选择。
+                bool cancelPressed = Keyboard.current != null
+                    && Keyboard.current.escapeKey.wasPressedThisFrame;
 
                 if (cancelPressed)
                 {
@@ -126,11 +128,17 @@ namespace Vindicator.UI
             }
         }
 
-        /// <summary>指针是否落在任意 UI 元素上（含面板与按钮）。</summary>
+        /// <summary>指针是否落在任意 UI 元素上（含面板、按钮与开发者 IMGUI 面板）。</summary>
         public static bool IsPointerOverUI(Vector2 screenPoint)
         {
             var eventSystem = EventSystem.current;
-            return eventSystem != null && eventSystem.IsPointerOverGameObject();
+            if (eventSystem != null && eventSystem.IsPointerOverGameObject())
+            {
+                return true;
+            }
+
+            // 开发者生成面板是 IMGUI，不在 EventSystem 里；否则点它会误触发场景框选。
+            return DeveloperSpawnController.BlocksWorldInput(screenPoint);
         }
 
         private static bool IsControlHeld()

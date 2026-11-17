@@ -335,6 +335,21 @@ namespace Vindicator.UI
             previousBuffer.Clear();
             previousBuffer.AddRange(selected);
 
+            // 先剔除死亡/已销毁的条目。单位死亡后 Unity 销毁对象时，
+            // 选择集合里的接口引用不会变成 C# null；若继续留着，
+            // 下一次高亮 diff 会抛 MissingReferenceException，把整次选择更新
+            // （包括玩家新的点选/框选）一起中断，表现为“点不动、编不了队”。
+            bool pruned = false;
+            for (int i = selected.Count - 1; i >= 0; i--)
+            {
+                var item = selected[i];
+                if (item == null || !item.IsSelectable)
+                {
+                    selected.RemoveAt(i);
+                    pruned = true;
+                }
+            }
+
             var resolved = new List<ISelectable>();
 
             if (additive)
@@ -356,7 +371,9 @@ namespace Vindicator.UI
                 }
             }
 
-            if (SameSet(selected, resolved))
+            // 即使集合内容没变，只要剔除了无效条目也要广播一次：
+            // 旧命令层（UnitSelection）需要跟着清掉已经死亡的选中单位。
+            if (!pruned && SameSet(selected, resolved))
             {
                 return;
             }

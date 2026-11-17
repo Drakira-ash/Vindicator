@@ -51,6 +51,36 @@ public static class FormationLayout
     }
 
     /// <summary>
+    /// 生成 count 个锚点局部槽位：x = 右方向，y = 前方向（+y 为第一排）。
+    /// 结果写入 offsets（先清空），调用方可复用列表。
+    /// </summary>
+    public static void FillLocalOffsets(
+        int count,
+        FormationType formation,
+        float spacing,
+        List<Vector2> offsets)
+    {
+        offsets.Clear();
+        if (count <= 0)
+        {
+            return;
+        }
+
+        float step = Mathf.Max(0.05f, spacing);
+        int columns = Mathf.Max(1, ColumnsFor(count, formation));
+        int rows = Mathf.CeilToInt((float)count / columns);
+
+        for (int i = 0; i < count; i++)
+        {
+            int column = i % columns;
+            int row = i / columns;
+            float lateral = (column - (columns - 1) * 0.5f) * step;
+            float depth = ((rows - 1) * 0.5f - row) * step;
+            offsets.Add(new Vector2(lateral, depth));
+        }
+    }
+
+    /// <summary>
     /// 生成 count 个槽位。锚点是队形中心，第一排位于朝向前方。
     /// 结果写入 slots（先清空），调用方可复用列表。
     /// </summary>
@@ -68,22 +98,20 @@ public static class FormationLayout
             return;
         }
 
-        float step = Mathf.Max(0.05f, spacing);
+        FillLocalOffsets(count, formation, spacing, localOffsetScratch);
+
         forward = Flatten(forward);
         Vector3 right = Vector3.Cross(Vector3.up, forward).normalized;
 
-        int columns = Mathf.Max(1, ColumnsFor(count, formation));
-        int rows = Mathf.CeilToInt((float)count / columns);
-
-        for (int i = 0; i < count; i++)
+        for (int i = 0; i < localOffsetScratch.Count; i++)
         {
-            int column = i % columns;
-            int row = i / columns;
-            float lateral = (column - (columns - 1) * 0.5f) * step;
-            float depth = ((rows - 1) * 0.5f - row) * step;
-            slots.Add(anchor + right * lateral + forward * depth);
+            Vector2 offset = localOffsetScratch[i];
+            slots.Add(anchor + right * offset.x + forward * offset.y);
         }
     }
+
+    // FillSlots 每帧都可能被小队调用，用复用的临时列表避免分配。
+    private static readonly List<Vector2> localOffsetScratch = new List<Vector2>();
 
     /// <summary>取单个槽位，便于测试与零散查询。</summary>
     public static Vector3 GetSlot(

@@ -51,6 +51,10 @@ namespace Vindicator.UI
             background = CreateImage("Background", rect, new Color(0.12f, 0.13f, 0.16f, 0.85f));
             Stretch(background.rectTransform, 2f);
 
+            // 卡片必须有一个可命中的 Graphic，否则 uGUI 射线找不到本卡片的
+            // IPointerClickHandler，点击会穿透到场景。
+            background.raycastTarget = true;
+
             icon = CreateImage("Icon", background.rectTransform, Color.gray);
             var iconRect = icon.rectTransform;
             iconRect.anchorMin = new Vector2(0.5f, 1f);

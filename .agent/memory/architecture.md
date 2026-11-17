@@ -16,7 +16,7 @@
 | `UnitMotor` | NavMeshAgent 后端：速度每帧取 `StatBlock.MoveSpeed`；攻击时 `isStopped`，恢复后继续寻路；未落在 NavMesh 时 `Warp` 到最近点。 |
 | `UnitMover` | 贴地路点/坐标后端（实现 `UnitLocomotion`）：路点只给水平走向，高度由脚下 `SphereCast` 探测决定；无 route 时可用 `MoveTo` 追坐标。 |
 | `EnemyBrain` | Idle → Patrol → Chase → Attack；每 0.25s 索敌；到达巡逻点 0.5m 内 `Halt` 转 Idle，未配巡逻点则 `Stop` + `SetPaused(false)` 把移动交还路线；目标进入射程则暂停并攻击。追击写 `UnitTargetState.ChaseTarget`、攻击写 `LockTarget`，Idle/巡逻/死亡清空。`interceptEnabled` 默认 `false`（2026-11-08 计划暂时取消拦截），关闭时不响应 `InterceptRequested`；开启后恢复旧转火逻辑。目标丢失当帧先 `Halt` 回 Idle，下一帧再判定。状态机见 `YC/单位状态机_2026_11_08.md`。 |
-| `WarriorBrain` | Idle → Move → Chase → Attack → Return；检测 **4m**（2026-11-08 由 10 下调）、拴绳 14m；`UnitCommander.HasOrder` 时玩家命令优先（移动/集火），命令结束后恢复驻守。追击/攻击维护 `ChaseTarget`/`LockTarget`，驻守/返回/死亡清空。`interceptEnabled` 默认 `false`，关闭时只锁定不请求拦截。接战距离取双方射程较小值。 |
+| `WarriorBrain` | Idle → Move → Chase → Attack → Return；基础检测 **3m**、拴绳 14m；小队姿态会把有效检测切到 **戒备 6m / 驻守 3m**。`UnitCommander.HasOrder` 时玩家命令优先（移动/集火），命令结束后恢复驻守。跟随移动命令带 `FollowOrder`：到点不清命令，由小队统一结束；命令 true→false 时把 `guardPosition` 更新为当前位置。驻守姿态下拴绳锚点改为小队集结点、半径 5m；戒备姿态在目标丢失时原地停留（`StayInPlace`），不返回旧驻守点。追击/攻击维护 `ChaseTarget`/`LockTarget`，驻守/返回/死亡清空。`interceptEnabled` 默认 `false`，关闭时只锁定不请求拦截。接战距离取双方射程较小值。 |
 | `UnitEvents` | 全局战斗事件；`InterceptRequested` / `InterceptReleased` 携带拦截者 `Unit` 与被拦截的 `UnitHealth`。 |
 | `UnitSpawner` | 测试用生成器：按间隔生成敌人并设置巡逻终点，出生点吸附 NavMesh。 |
 | `UnitTurretBrain` | 塔 AI：原地索敌与开火；目标走出射程立即清空并重索敌；攻击时写 `LockTarget`，无目标清空；`StateName` 输出 `Idle/Attack`；是否可攻击由 `Unit.abilitiesEnabled` 控制。 |
@@ -28,11 +28,13 @@
 | `AI/FormationLayout` | 纯函数编队站位：`Line` 一排、`Column` 一列、`Grid` 近似方形；锚点为队形中心，槽位按 `spacing` 对称展开，右方向 = `Cross(up, forward)`；可选 `NavMesh.SamplePosition` 吸附，EditMode 无 NavMesh 时保留原槽位。 |
 | `AI/UnitCommander` | 每单位命令接收器：`SquadId`、`Move`/`Attack` 命令与目标；Brain 读取执行，命令完成/目标死亡后清空。`TryGetAttackTarget` 供 Brain 安全取目标。 |
 | `AI/UnitTargetState` | 单位目标指针数据表：`ChaseTarget`/`LockTarget` 两个 `Transform`，Brain 维护、开发者表只读；销毁对象读取为 null；`Ensure` 自动补挂。 |
-| `AI/Squad` / `SquadRegistry` / `SquadBrain` | 运行期小队：成员、队形、锚点、集火目标；`SquadRegistry` 自动编号/建队/解散（成员被整体移走或全员阵亡后自动 `Disband`，不留 0 人空壳）；`SquadBrain` 行为树 `攻击命令 > 移动命令 > 自动接敌 > Idle`，输出 `Idle/Moving/Engaging`。`Squad.ManualControl`：玩家给部分成员下过个体命令后为 `true`，行为树跳过自动接敌，直到 `MoveTo`/`Attack` 等小队级命令解除——否则集火会覆盖玩家刚下的个体命令。小队不写场景。 |
+| `AI/Squad` / `SquadRegistry` / `SquadBrain` | 运行期小队：成员、队形、锚点、集结点、姿态、集火目标；`SquadRegistry` 自动编号/建队/解散（成员被整体移走或全员阵亡后自动 `Disband`，不留 0 人空壳）；`SquadBrain` 行为树 `攻击命令 > 移动命令 > 自动接敌 > Idle`，输出 `Idle/Moving/Engaging`。移动为**锚点跟随**：`MoveTo` 只记录目标，`Advance(dt)` 每帧推进锚点、限速转向、按队形重算槽位并重发 `IssueMove(..., follow:true)`；起步等队形误差 ≤1m，行进中 >2m 减速、>3.5m 停车等待，到点后用 `settleRadius=0.3m` 判定成员落位并整队转向。槽位身份用 `UnitCommander.SlotIndex` 稳定绑定，死亡时只让越界成员补位。`Squad.ManualControl`：玩家给部分成员下过个体命令后为 `true`，行为树跳过自动接敌，直到 `MoveTo`/`Attack` 等小队级命令解除。姿态与集结点见下一行。小队不写场景。 |
+| `AI/SquadPosture` / `Squad.RallyPoint` | 姿态：友军默认 `Garrison`、敌方规则默认 `Alert`（敌方 Squad 尚未创建）。`SetPosture` 推送成员 Brain：戒备感知 6、战后不回位；驻守感知 3、拴绳锚点为集结点且 5m 内结束追击并回槽位。`RallyPoint` 建队时取质心、整队移动完成后自动更新为落点；`SetRallyPoint` 为手动 API。`SquadBrain.EnforceGarrisonLeash` 每帧检查集火目标是否离开集结点 5m，`FindEnemy` 也只返回 5m 内敌人。 |
 | `AI/UnitSelection` | 玩家当前选择（静态列表 + `Changed` 事件），与输入层解耦，EditMode 可直接设置。 |
-| `Player/PlayerCommandController` | RTS 操作：左键框选/点选、Shift 追加、F1 全选、右键移动/攻击、G 编队（编号自增）、1-9 选择小队、Ctrl+1-9 指定编号；运行期自动创建。**默认不编队**：右键移动/攻击只给选中单位下个体命令（移动保持质心相对位置），只有 `SelectionSquad()` 判定"选择恰好覆盖某小队全部存活成员"时才走 `Squad.MoveTo/Attack`；下个体命令前 `DropSquadOrders()` 让所属小队放弃旧命令并 `SetManualControl(true)`（暂停自动接敌，避免集火覆盖个体命令）。框选时绘制选择框、选中单位画绿色标记；判定用 Renderer 屏幕包围盒（无 Renderer 时枢轴 ±8px）；`[Select]` / `[Order]` / `[Squad]` 日志可确认输入与命令是否到达。选择/命令 API 与输入分离，便于 EditMode 驱动。 |
-| `Player/SquadPanel` | uGUI 编队面板：运行期创建 Canvas，显示“已选 N / 可指挥 M”与小队编号/人数/队形/状态，支持组建/选择/解散；Tab 收起。 |
-| `Developer/DeveloperTableData` / `DeveloperDataTable` | F3 开发者数据表：小队表与单位表（含追逐/锁定指针、小队编号）；IMGUI 绘制，仅开发者模式可见，销毁对象显示 `-`。 |
+| `Player/PlayerCommandController` | RTS 操作：左键框选/点选、Shift 追加、F1 全选、右键移动/攻击、G 编队（编号自增）、1-9 选择小队、Ctrl+1-9 指定编号、`Z` 循环阵型、`X` 切换姿态；运行期自动创建。右键成功移动后调用 `MoveDestinationFlag.Show` 在落点插旗（1.5s、无碰撞、Ignore Raycast）。**默认不编队**：右键移动/攻击只给选中单位下个体命令（移动保持质心相对位置），只有 `SelectionSquad()` 判定"选择恰好覆盖某小队全部存活成员"时才走 `Squad.MoveTo/Attack`；下个体命令前 `DropSquadOrders()` 让所属小队放弃旧命令并 `SetManualControl(true)`。`LegacySelectionEnabled` 由 `SelectionCommandBridge` 在 UI_Test 关闭，避免与新 UI 的 SelectionInputReader 重复左键选择；右键命令与热键保留。框选时绘制选择框、选中单位画绿色标记；判定用 Renderer 屏幕包围盒（无 Renderer 时枢轴 ±8px）；`[Select]` / `[Order]` / `[Squad]` / `[Formation]` / `[Posture]` 日志可确认输入与命令是否到达。 |
+| `Player/SquadPanel` | uGUI 编队面板：运行期创建 Canvas，显示“已选 N / 可指挥 M”与小队编号/人数/队形/状态/姿态，支持组建/选择/解散；Tab 收起。 |
+| `Player/MoveDestinationFlag` | 移动落点旗子：运行时 primitive（旗杆+布面），无 Collider、Ignore Raycast；`ScaleAt` 为可测纯曲线，出现 0.15s、保持、0.35s 缩没，总寿命 1.5s。 |
+| `Developer/DeveloperTableData` / `DeveloperDataTable` | F3 开发者数据表：小队表（含姿态）与单位表（含追逐/锁定指针、小队编号）；IMGUI 绘制，仅开发者模式可见，销毁对象显示 `-`。 |
 | `IPerceptionSource` | 统一感知范围来源：`EnemyBrain`/`WarriorBrain`/`CitizenBrain` 优先读 `StatBlock.PerceptionRange`（为 0 时回退各自的序列化字段），`UnitTurretBrain` 返回攻击范围且禁用时为 0。 |
 | `DeveloperMode` / `DeveloperModeController` | `~`（`BackQuote`）开关，`F2` 为旧别名；`startEnabled` 初始值（默认 `false`，需在 Inspector 或场景里显式打开）；为所有 `IPerceptionSource` 单位画半透明球（独立对象、无 Collider、Ignore Raycast、按阵营着色）；关闭时清空，无单位的球会被回收。`RuntimeInitializeOnLoadMethod` 自动创建，无需手动放置。编辑模式销毁走 `DestroyImmediate`（`DestroyNow`），运行时走 `Destroy`；`DontDestroyOnLoad` 只在 `Application.isPlaying` 时调用，EditMode 测试可直接驱动 `Awake`。球体材质优先用 `Assets/Resources/Shaders/PerceptionVolume.shader`（模板 `Comp NotEqual`，同一像素只画第一个通过深度测试的球——透明队列按远到近绘制，因此通常是较远的那个；重叠不叠加透明度；填充 0.10 + Fresnel 边缘），找不到 shader 才退回 URP Unlit 半透明；材质按阵营各一份共享。 |
 | `Developer/DeveloperSpawnCatalog` / `DeveloperSpawnController` / `DeveloperSpawnPanel` | 开发者模式单位生成/销毁：`~` 进入后 `K` 销毁选择、`S`/`D` 在鼠标处生成民兵/普通敌人；目录资产 `Assets/Resources/Developer/SpawnCatalog.asset`（`militia`→`Warrior_Guard`、`enemy`→`Enemy_Normal_Nav`）按阵营列出条目。生成点优先射线命中，其次与 `y=0` 平面求交，最后 `NavMesh.SamplePosition` 吸附（失败保留原坐标）。生成敌人时继承场景 `UnitSpawner.PatrolGoal`（其次已有 `EnemyBrain.PatrolGoal`）并 `SetPatrolGoal`，否则预制体无巡逻点会原地待命。面板（右侧 IMGUI，`F4` 或标题栏展开）按阵营预览并进入放置模式（鼠标处显示禁用全部 `Behaviour`/`Collider` 的预览实例，左键放置、右键/`Esc` 取消），并逐行销毁任意单位。销毁走 `UnitHealth.TakeDamage` 正常死亡路径。`PlayerCommandController` 在放置模式或鼠标位于面板上时跳过框选/右键（IMGUI 不经过 EventSystem）；开发者模式下 `IsSelectable` 放开到任意存活单位（含敌人）以便编辑/销毁，但 `IsCommandable` 仍只允许 Player+`WarriorBrain`，右键移动/攻击与编队都会过滤敌人；关闭开发者模式时控制器监听 `DeveloperMode.Changed`，立即把仅用于编辑的敌人移出选择。 |
@@ -50,7 +52,14 @@
 
 建筑/公民路径：`CitizenBrain.Search` → `UnitBuildingRegistry`（同队、`PerceptionRange` 内，废墟优先）→ 走到 `interactRange` 内 → `UnitBuilding.AddBuildProgress(productivity * dt)` → 累计 500 → `Complete`（恢复 `UnitHealth`/炮台/能力、隐藏建造条、切材质）→ 下一帧公民 `Garrison` → 销毁自身。无建筑时才走 `UnitRegistry.FindNearestHostile` 追击/攻击。感知范围经 `IPerceptionSource` 统一暴露，`DeveloperModeController` 只读取它生成可视化球体。
 
-小队/玩家路径：`PlayerCommandController`（框选/右键/热键）→ `UnitSelection` → `SquadRegistry`/`Squad`（站位 `FormationLayout`）→ `UnitCommander.IssueMove/IssueAttack` → 成员 Brain 的 `ExecuteOrder` → `UnitLocomotion`/`UnitAbility`。Brain 在追击/攻击时写 `UnitTargetState`，`SquadBrain` 行为树每帧输出 `Idle/Moving/Engaging`，`DeveloperTableData` 只读两张表供 F3 展示。
+小队/玩家路径：`PlayerCommandController`（框选/右键/热键）→ `UnitSelection` → `SquadRegistry`/`Squad`（站位 `FormationLayout`，`Advance` 锚点跟随）→ `UnitCommander.IssueMove/IssueAttack` → 成员 Brain 的 `ExecuteOrder` → `UnitLocomotion`/`UnitAbility`。Brain 在追击/攻击时写 `UnitTargetState`，`SquadBrain` 行为树每帧输出 `Idle/Moving/Engaging`，`DeveloperTableData` 只读两张表供 F3 展示。
+
+### UI 选择与兵牌（`Assets/Script/UI/`，2026-11-16）
+
+- 选择：`SelectionService` 是唯一真相源；`SelectionInputReader` 左键框选/点选、`Esc` 清空（右键留给 `PlayerCommandController` 下命令）；`SelectionHighlighter` 只追加 `SelectionOutline` 材质槽，不替换本体材质；`UnitSelectableBootstrap` 给运行时生成的单位补 `UnitSelectable`。
+- `SelectionCommandBridge` 在 `UI_Test` 中双向同步 `SelectionService` ↔ `UnitSelection`，并关闭 `PlayerCommandController.LegacySelectionEnabled`（旧左键选择与 IMGUI 标记），右键命令/热键保留。没有它，点卡片后右键命令看不到选中单位。
+- 面板：`RosterModel` 按阵营分栏、友军按 `SquadId` 合组；`RosterPanelView` 用单卡池 + 兵牌池渲染，`+X` 按组计数；`SquadCardView` 点击选中全队并展开成员浮层（成员行点击单选），右上剑/盾切换姿态，浮层底部「横队/纵队/方阵」按钮；`SquadRosterGrouping` 是无依赖纯逻辑，EditMode 覆盖。卡片背景与面板必须有 `raycastTarget`，否则点击穿透场景。
+- `UI_Test`：`Tools/UI/Update Selection Test Scene In Place` 原地补 `UnitSelectable`、重建 UI、加 `SelectionCommandBridge`、确保 `DeveloperMode`；保留 4 战士、2 投射塔、刷怪器、巡逻点。开发者生成面板是 IMGUI，`SelectionInputReader` 必须查 `DeveloperSpawnController.BlocksWorldInput` 才能避免点面板误框选。
 
 详细实现记录：[YC/Unit实现记录_2026_10_28.md](../../YC/Unit实现记录_2026_10_28.md)、[YC/ToDo_2026_10_29.md](../../YC/ToDo_2026_10_29.md)、[YC/单位状态机_2026_11_08.md](../../YC/单位状态机_2026_11_08.md)。设计依据：[YC/Research/README.md](../../YC/Research/README.md)。
 
@@ -104,6 +113,9 @@
 16. **开发者模式球体是纯展示对象**：独立 GameObject、无 Collider、Ignore Raycast 层；只读 `IPerceptionSource.PerceptionRange`，不得参与索敌/贴地探测。关闭时清空全部球体，重复开关不泄漏。`CitizenBrain.Tick(deltaTime)` 公开仅为 EditMode 可驱动，运行时仍由 `Update` 调用。
 17. **追逐/锁定指针互斥，玩家命令优先于个体 AI**：追击只写 `ChaseTarget` 并清 `LockTarget`，攻击只写 `LockTarget` 并清 `ChaseTarget`，待命/死亡都清空。`UnitCommander.HasOrder` 为真时 Brain 必须先执行命令，不得自行索敌；命令完成或目标死亡后命令自动清空并恢复个体行为。
 18. **拦截默认关闭但代码保留**：`WarriorBrain.interceptEnabled` 与 `EnemyBrain.interceptEnabled` 默认 `false`；恢复旧拦截行为只改开关，不要删除 `UnitEvents` 事件链或测试。
+19. **小队移动是“锚点跟随”，不是一次性发终点**：`Squad.MoveTo` 只设目标和起始锚点，`SquadBrain.Tick` 每帧调 `Squad.Advance(dt)` 推进锚点并重算槽位。成员命令必须带 `follow=true`，到点不清命令；完成由 `Advance` 在“锚点到达 + 全员进 `settleRadius`”时统一触发。槽位身份用 `UnitCommander.SlotIndex`，不要在成员增删时按列表下标重排。NavMesh 吸附失败时不要硬推：槽位退到锚点（锚点本身不在 NavMesh 时保留原槽位）。
+20. **姿态与集结点是 Squad 级权威状态**：友军默认 `Garrison`、敌方规则默认 `Alert`；基础感知 3、戒备 6、驻守 3。驻守把成员拴绳锚点设为 `RallyPoint`、半径 5m；戒备在目标丢失后原地停留。集结点建队取质心、整队移动完成自动更新为落点；`SetRallyPoint` 为手动 API。不要在 `UnitDefinition` 上写运行时姿态。
+21. **UI 选择必须同步到 UnitSelection**：`UI_Test` 里 `SelectionCommandBridge` 双向同步 `SelectionService` ↔ `UnitSelection`，并关闭 `PlayerCommandController.LegacySelectionEnabled`；`SelectionInputReader` 右键不清选择（右键用于下命令），只有 Esc 清空。兵牌/单卡必须有可命中的 `raycastTarget` Graphic，面板空白处加透明命中层，否则点击会穿透到场景。
 
 ## 5. 资产关系（概览）
 

@@ -50,6 +50,8 @@ public class SquadBrain : MonoBehaviour
         }
 
         squad.Tick();
+        squad.Advance(deltaTime);
+        EnforceGarrisonLeash();
 
         scanTimer -= deltaTime;
         if (scanTimer <= 0f)
@@ -92,20 +94,13 @@ public class SquadBrain : MonoBehaviour
                     return BehaviorStatus.Success;
                 })),
 
-            // 2. 移动命令：等待全部成员到达槽位后完成。
+            // 2. 移动命令：由 Squad.Advance 在“锚点到达 + 成员落位”后统一完成，
+            //    行为树这里只维持 Moving 状态，避免锚点还在走时提前结束。
             new BehaviorSequence(
                 new BehaviorCondition(() => squad.MoveOrderActive),
                 new BehaviorAction(() =>
                 {
-                    if (squad.AllMembersArrived())
-                    {
-                        squad.CompleteMoveOrder();
-                    }
-                    else
-                    {
-                        squad.SetState(SquadState.Moving);
-                    }
-
+                    squad.SetState(SquadState.Moving);
                     return BehaviorStatus.Success;
                 })),
 
@@ -157,6 +152,40 @@ public class SquadBrain : MonoBehaviour
             range = fallbackEngageRange;
         }
 
-        return UnitRegistry.FindNearestHostile(squad.Centroid(), squad.Team, range);
+        var enemy = UnitRegistry.FindNearestHostile(squad.Centroid(), squad.Team, range);
+
+        // 驻守姿态只接集结点 5m 内的敌人；超出后由 EnforceGarrisonLeash 放弃追击并回位。
+        if (enemy != null &&
+            squad.Posture == SquadPosture.Garrison &&
+            squad.HasRallyPoint &&
+            enemy.DistanceTo(squad.RallyPoint) > squad.GarrisonLeashRange)
+        {
+            return null;
+        }
+
+        return enemy;
+    }
+
+    /// <summary>驻守：集火目标离开集结点 5m 后立即结束攻击，成员回驻守槽位。</summary>
+    private void EnforceGarrisonLeash()
+    {
+        if (squad.Posture != SquadPosture.Garrison || !squad.HasRallyPoint)
+        {
+            return;
+        }
+
+        var target = squad.AttackTarget;
+        if (target == null)
+        {
+            return;
+        }
+
+        if (target.DistanceTo(squad.RallyPoint) <= squad.GarrisonLeashRange)
+        {
+            return;
+        }
+
+        squad.CompleteOrders();
+        pendingEnemy = null;
     }
 }

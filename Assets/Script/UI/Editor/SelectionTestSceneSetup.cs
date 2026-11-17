@@ -70,6 +70,10 @@ namespace Vindicator.UI.EditorTools
             //    一个描边材质槽，本体材质（URP Lit）始终不动。
             BuildUserInterface(scene, camera: Camera.main);
 
+            // 开发者模式与编队体系：开发者生成面板/数据表/目录是运行时自举的，
+            // 但 DeveloperMode 开关需要场景里有一个序列化对象才会默认启用。
+            UnitDemoSetup.EnsureDeveloperModeObject();
+
             // 注意：这里**不冻结**战斗。UI_Test 必须是 RoadWorkflow_Test 的真实场景
             // （怪物逐波刷出、塔防交战），否则验收的不是实际玩法。战斗会改变面板内容，
             // 这是预期行为。
@@ -79,6 +83,44 @@ namespace Vindicator.UI.EditorTools
 
             Debug.Log(string.Format(
                 "[UI] {0} 构建完成：{1} 个场景单位挂上 UnitSelectable。",
+                TargetScenePath, selectableCount));
+        }
+
+        /// <summary>
+        /// 原地更新 UI_Test：保留场景现有 AI/塔/刷怪布置，只补 UnitSelectable、
+        /// 重建生成 UI/EventSystem，并确保 DeveloperMode 默认开启。幂等，可重复执行。
+        /// </summary>
+        [MenuItem("Tools/UI/Update Selection Test Scene In Place", false, 21)]
+        public static void UpdateSelectionTestSceneInPlace()
+        {
+            if (!EnsureSaveCurrentScene())
+            {
+                return;
+            }
+
+            if (!File.Exists(TargetScenePath))
+            {
+                Debug.LogError(
+                    "[UI] 找不到 " + TargetScenePath +
+                    "，请先执行 Tools/UI/Create Selection Test Scene。");
+                return;
+            }
+
+            var scene = EditorSceneManager.GetActiveScene();
+            if (scene.path != TargetScenePath)
+            {
+                scene = EditorSceneManager.OpenScene(TargetScenePath, OpenSceneMode.Single);
+            }
+
+            int selectableCount = AttachSelectables(scene);
+            BuildUserInterface(scene, camera: Camera.main);
+            UnitDemoSetup.EnsureDeveloperModeObject();
+
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
+
+            Debug.Log(string.Format(
+                "[UI] {0} 原地更新完成：{1} 个场景单位带 UnitSelectable，DeveloperMode 已开启。",
                 TargetScenePath, selectableCount));
         }
 
@@ -198,6 +240,9 @@ namespace Vindicator.UI.EditorTools
 
             // 运行时刷出来的怪物不在场景里，靠这个组件在注册表事件里补 UnitSelectable。
             interactionGo.AddComponent<UnitSelectableBootstrap>();
+
+            // 新 UI 选择与旧命令层 UnitSelection 的桥。没有它，点卡片后右键命令看不到选中单位。
+            interactionGo.AddComponent<SelectionCommandBridge>();
 
             SetPrivateField(inputReader, "targetCamera", camera);
             SetPrivateField(inputReader, "dragBox", dragBox);

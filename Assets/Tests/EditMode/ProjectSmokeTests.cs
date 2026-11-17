@@ -15,7 +15,7 @@ public class ProjectSmokeTests
     public void UnitTemplates_PerceptionMatchesDesign()
     {
         Assert.AreEqual(7f, LoadDefinition("Enemy_Normal").perceptionRange, 0.001f, "敌人感知应为 7");
-        Assert.AreEqual(4f, LoadDefinition("Warrior_Guard").perceptionRange, 0.001f, "战士感知应为 4（11.8 计划下调）");
+        Assert.AreEqual(3f, LoadDefinition("Warrior_Guard").perceptionRange, 0.001f, "战士基础感知应为 3（驻守 3 / 戒备 6）");
         Assert.AreEqual(2f, LoadDefinition("Citizen").perceptionRange, 0.001f, "公民感知应为 2");
     }
 

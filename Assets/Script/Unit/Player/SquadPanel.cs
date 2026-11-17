@@ -316,11 +316,12 @@ public class SquadPanel : MonoBehaviour
     {
         int count = squad.MemberUnits().Count;
         return string.Format(
-            "小队 {0}｜{1} 人｜{2}｜{3}",
+            "小队 {0}｜{1} 人｜{2}｜{3}｜{4}",
             squad.SquadId,
             count,
             squad.Formation,
-            squad.State);
+            squad.State,
+            squad.Posture);
     }
 
     private Text CreateText(Transform parent, string name, string content, int size, bool bold)

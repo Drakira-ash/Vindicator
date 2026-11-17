@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "updated_at": "2026-11-15T09:59:00Z",
+  "updated_at": "2026-11-17T13:45:43Z",
   "tasks": [
     {
       "id": "unit-face-target",
@@ -506,6 +506,42 @@
         "S/D 或面板生成敌人时，若场景存在 UnitSpawner 或已有敌人的巡逻目标，则新敌人继承该目标并在无索敌目标时朝其移动。",
         "EditMode 测试覆盖：开发者模式下敌人可选、可被 K 销毁、命令过滤、生成敌人获得巡逻目标。",
         "Unity 编译 0 error / 0 warning，EditMode 全通过；harness validate 通过。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "squad-follow-posture-roster",
+      "title": "小队跟随移动 + 姿态/集结点 + 兵牌 UI + UI_Test 整合",
+      "status": "done",
+      "priority": 1,
+      "source": "YC/小队与编队设计_2026_11_08.md#12 后续 + 用户会话 2026-11-16（姿态/集结点/兵牌/UI_Test 合并）",
+      "description": "P0+P1：稳定槽位与锚点跟随；每个小队有集结点与姿态（友军默认驻守、敌方规则预留戒备）；戒备感知3→6且战后不回位，驻守敌人离集结点5m停止追击；移动落点插旗反馈；兵牌 UI 按队伍分组、可展开、剑/盾姿态切换、阵型按钮与热键；UI_Test 原地补 DeveloperMode 并打通新旧选择。（2026-11-16 实现并验证：编译 0 error/0 warning，EditMode 174/174，PlayMode UI_Test 截图已存 Assets/Screenshots/）",
+      "acceptance_criteria": [
+        "整队移动时锚点持续朝落点移动，成员全程保持槽位；队形误差>2m减速、>3.5m停车等待；到点后全部成员进入0.3m才结束并整队转向。",
+        "槽位与成员稳定绑定：成员死亡/离队只让必要的人补位，新成员拿新的最高下标。",
+        "友军小队默认驻守、敌方小队规则默认戒备；驻守感知3、拴绳锚点为集结点且敌人距离>5m停止追击回槽位；戒备感知6、战斗结束不回原位置。",
+        "整队移动完成后集结点更新为落点；Squad 提供手动 SetRallyPoint API；兵牌剑/盾图标或 X 热键可切换姿态，部分选择不生效。",
+        "每次成功移动命令在落点出现约1.5s的旗子，无碰撞、不挡选择。",
+        "友军满编队伍在兵牌中合为一个卡，点击选中全队、展开显示成员信息；卡片显示姿态/阵型/状态/聚合血量；可切换横队/纵队/方阵，Z 热键循环。",
+        "新 UI 选择与 UnitSelection 双向同步；右键移动/攻击可用；卡片/面板点击不再穿透场景。",
+        "UI_Test 原地补齐 DeveloperMode（默认开启），保留 4 战士/2 投射塔/刷怪器/巡逻点/UI；幂等菜单不重复生成；RoadWorkflow_Test 与 MVP.unity 不变。",
+        "index+validate 0 error；Unity 编译 0 error/0 warning；EditMode 全部通过并采纳证据；PlayMode 截图验收跟随/旗子/姿态/兵牌/开发者面板。"
+      ],
+      "blockers": []
+    },
+    {
+      "id": "selection-squad-rally-fixes-2026-11-17",
+      "title": "修复生成单位无法选择/编队、阵型不立即生效、驻守战后不回集结点",
+      "status": "done",
+      "priority": 1,
+      "source": "YC/小队与编队设计_2026_11_08.md#1210-选择阵型驻守修复2026-11-17",
+      "description": "选中单位被销毁后 SelectionHighlighter.Apply 抛 MissingReferenceException，SelectionService.SetSelection 中断，后续点选/框选不再同步到 UnitSelection，表现为新生成民兵无法操控、无法编队。另修复空闲切换阵型没有可见效果（戒备姿态不推驻守槽位），以及命令结束覆盖小队驻守槽位导致驻守成员不返回集结点。",
+      "acceptance_criteria": [
+        "选中单位死亡并被销毁后，再次点选/框选仍能更新选择并同步到 UnitSelection（不再抛 MissingReferenceException）",
+        "开发者模式生成的民兵可被点选/框选，按 G 能组成多人小队并接受移动命令",
+        "空闲（含戒备姿态）切换横队/纵队/方阵会立即给成员下发新槽位移动命令，且小队不卡在 Moving",
+        "驻守小队战斗结束/命令清空后成员返回集结点阵型槽位；锚点到达后成员长时间无法落位时按 settleTimeout 超时收尾",
+        "Unity 编译 0 error/0 warning；EditMode 177/177 通过"
       ],
       "blockers": []
     }

@@ -10,7 +10,7 @@ public static class DeveloperTableData
     /// <summary>小队表列名。</summary>
     public static readonly string[] SquadHeaders =
     {
-        "ID", "名称", "阵营", "队形", "人数", "状态", "目标"
+        "ID", "名称", "阵营", "队形", "人数", "状态", "姿态", "目标"
     };
 
     /// <summary>单位表列名。</summary>
@@ -42,6 +42,7 @@ public static class DeveloperTableData
                 squad.Formation.ToString(),
                 squad.MemberUnits().Count.ToString(),
                 squad.State.ToString(),
+                squad.Posture.ToString(),
                 target != null ? target.name : "-"
             });
         }

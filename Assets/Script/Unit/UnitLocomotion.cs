@@ -24,4 +24,19 @@ public abstract class UnitLocomotion : MonoBehaviour
         Stop();
         SetPaused(true);
     }
+
+    /// <summary>
+    /// 原地转向指定方向（水平面）。默认直接旋转 Transform；
+    /// NavMeshAgent 后端可覆写为暂停自动旋转后再转。
+    /// </summary>
+    public virtual void FaceDirection(Vector3 worldDirection)
+    {
+        worldDirection.y = 0f;
+        if (worldDirection.sqrMagnitude < 0.0001f)
+        {
+            return;
+        }
+
+        transform.rotation = Quaternion.LookRotation(worldDirection.normalized, Vector3.up);
+    }
 }

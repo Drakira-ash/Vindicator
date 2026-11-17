@@ -96,7 +96,7 @@ public class DeveloperDataTable : MonoBehaviour
             "小队表（全局）",
             DeveloperTableData.SquadHeaders,
             DeveloperTableData.BuildSquadRows(),
-            new[] { 40f, 80f, 60f, 60f, 50f, 70f, 140f });
+            new[] { 40f, 80f, 60f, 60f, 50f, 70f, 60f, 140f });
 
         DrawTable(
             y + 8f,

@@ -88,12 +88,15 @@ public class SquadBrainTests
         var squad = CreateSquad(out var brain, new Vector3(0f, 0f, 0f), new Vector3(2f, 0f, 0f));
         squad.MoveTo(new Vector3(20f, 0f, 20f), Vector3.forward, false);
 
-        for (int i = 0; i < squad.Members.Count; i++)
+        // 跟随移动是逐帧推进的：每帧把成员同步到当前槽位，模拟成员跟队。
+        for (int step = 0; step < 2000 && squad.MoveOrderActive; step++)
         {
-            squad.Members[i].transform.position = squad.Members[i].Destination;
+            brain.Tick(0.05f);
+            for (int i = 0; i < squad.Members.Count; i++)
+            {
+                squad.Members[i].transform.position = squad.Members[i].Destination;
+            }
         }
-
-        brain.Tick(0.01f);
 
         Assert.AreEqual(SquadState.Idle, squad.State);
         Assert.IsFalse(squad.MoveOrderActive);
@@ -155,7 +158,8 @@ public class SquadBrainTests
     public void AttackOrder_EndsWhenTargetDies()
     {
         var squad = CreateSquad(out var brain, new Vector3(0f, 0f, 0f), new Vector3(2f, 0f, 0f));
-        var enemy = CreateUnit("Enemy", UnitTeam.Enemy, new Vector3(50f, 0f, 50f));
+        // 放在集结点 5m 内：默认驻守姿态下超出 5m 会立即放弃目标。
+        var enemy = CreateUnit("Enemy", UnitTeam.Enemy, new Vector3(3f, 0f, 0f));
 
         squad.Attack(enemy.Health);
         brain.Tick(0.01f);

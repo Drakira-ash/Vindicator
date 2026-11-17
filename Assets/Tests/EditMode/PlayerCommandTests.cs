@@ -362,6 +362,39 @@ public class PlayerCommandTests
         Assert.IsNull(SquadRegistry.Find(firstId));
     }
 
+    [Test]
+    public void CycleSelectedSquadFormation_RequiresWholeSquad()
+    {
+        var a = CreateWarrior("A", Vector3.zero);
+        var b = CreateWarrior("B", new Vector3(2f, 0f, 0f));
+        var squad = SquadRegistry.Create(new[] { a, b });
+
+        Command.SelectUnits(new[] { a, b });
+        Assert.IsTrue(Command.CycleSelectedSquadFormation());
+        Assert.AreNotEqual(FormationType.Grid, squad.Formation, "默认方阵应切换到下一种");
+
+        Command.SelectUnits(new[] { a });
+        Assert.IsFalse(Command.CycleSelectedSquadFormation(), "部分选中不应改阵型");
+    }
+
+    [Test]
+    public void ToggleSelectedSquadPosture_RequiresWholeSquad()
+    {
+        var a = CreateWarrior("A", Vector3.zero);
+        var b = CreateWarrior("B", new Vector3(2f, 0f, 0f));
+        var squad = SquadRegistry.Create(new[] { a, b });
+
+        Assert.AreEqual(SquadPosture.Garrison, squad.Posture);
+
+        Command.SelectUnits(new[] { a, b });
+        Assert.IsTrue(Command.ToggleSelectedSquadPosture());
+        Assert.AreEqual(SquadPosture.Alert, squad.Posture);
+
+        Command.SelectUnits(new[] { a });
+        Assert.IsFalse(Command.ToggleSelectedSquadPosture(), "部分选中不应改姿态");
+        Assert.AreEqual(SquadPosture.Alert, squad.Posture, "失败的命令不应改变姿态");
+    }
+
     private PlayerCommandController Command
     {
         get

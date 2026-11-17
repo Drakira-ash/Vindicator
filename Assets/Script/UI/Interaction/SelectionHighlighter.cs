@@ -64,12 +64,28 @@ namespace Vindicator.UI
         /// </summary>
         public static void Apply(ISelectable selectable, bool selected)
         {
-            if (selectable == null || selectable.Transform == null)
+            if (selectable == null)
             {
                 return;
             }
 
-            var renderers = selectable.Transform.GetComponentsInChildren<Renderer>(true);
+            // 选择集合跨帧持有接口引用：单位被销毁后接口引用不是 C# null，
+            // 直接访问 Transform/Team 会抛 MissingReferenceException。
+            // 用 UnityEngine.Object 的“假空”判断提前退出，保证取消高亮不会
+            // 中断整个选择更新（否则下一次点击/框选也会一起失败）。
+            var unityObject = selectable as Object;
+            if (unityObject == null)
+            {
+                return;
+            }
+
+            var target = selectable.Transform;
+            if (target == null)
+            {
+                return;
+            }
+
+            var renderers = target.GetComponentsInChildren<Renderer>(true);
             if (renderers == null || renderers.Length == 0)
             {
                 return;

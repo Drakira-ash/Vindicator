@@ -18,8 +18,9 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
         Return
     }
 
-    // 民兵是宝贵资源：默认只在 4m 内主动接敌（2026-11-08 计划，由 10 下调）。
-    [SerializeField, Min(0f)] private float detectRange = 4f;
+    // 民兵是宝贵资源：基础只在 3m 内主动接敌；驻守姿态保持 3m，戒备姿态提升到 6m。
+    [SerializeField, Min(0f)] private float detectRange = 3f;
+    [SerializeField, Min(0f)] private float alertDetectRange = 6f;
     [SerializeField, Min(0f)] private float leashRange = 14f;
     [SerializeField, Min(0.1f)] private float guardArriveThreshold = 0.5f;
     [SerializeField, Min(0.05f)] private float searchInterval = 0.25f;
@@ -35,6 +36,15 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
     private Vector3 guardPosition;
     private float searchTimer;
     private State state = (State)(-1);
+    private bool hadOrder;
+
+    private bool hasSquadPosture;
+    private SquadPosture squadPosture;
+    private Vector3 squadRallyPoint;
+    private bool hasSquadRallyPoint;
+    private float squadLeashRange;
+    private Vector3 squadGuardPoint;
+    private bool hasSquadGuardPoint;
 
     /// <summary>当前目标，便于调试与测试断言。</summary>
     public IDamageable Target => target;
@@ -42,13 +52,31 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
     /// <summary>当前状态名，便于调试与测试断言。</summary>
     public string StateName => state.ToString();
 
-    /// <summary>感知范围：优先读模板属性，未配置时回退到序列化字段。</summary>
+    /// <summary>是否已被某个小队设置了姿态。</summary>
+    public bool HasSquadPosture => hasSquadPosture;
+
+    /// <summary>当前生效的小队姿态。</summary>
+    public SquadPosture SquadPosture => squadPosture;
+
+    /// <summary>当前驻守回位点，便于测试断言。</summary>
+    public Vector3 GuardPosition => guardPosition;
+
+    /// <summary>
+    /// 有效感知范围：基础值优先读模板属性/序列化字段；
+    /// 戒备姿态下至少为 <see cref="alertDetectRange"/>。
+    /// </summary>
     public float PerceptionRange
     {
         get
         {
             float stat = unit != null ? unit.Stats.Get(StatType.PerceptionRange) : 0f;
-            return stat > 0f ? stat : detectRange;
+            float baseRange = stat > 0f ? stat : detectRange;
+            if (hasSquadPosture && squadPosture == SquadPosture.Alert)
+            {
+                return Mathf.Max(baseRange, alertDetectRange);
+            }
+
+            return baseRange;
         }
     }
 
@@ -64,6 +92,48 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
         {
             Debug.LogError("WarriorBrain 需要同物体上的 UnitLocomotion（UnitMotor 或 UnitMover）。", this);
         }
+    }
+
+    /// <summary>
+    /// 由小队推送姿态：戒备提高感知且战后不回位；驻守把拴绳锚点设为集结点、
+    /// 距离 5m，并用 <paramref name="guardPoint"/> 指定集结点附近的回位槽位。
+    /// </summary>
+    public void ApplySquadPosture(
+        SquadPosture posture,
+        Vector3 rallyPoint,
+        bool hasRallyPoint,
+        float leashRangeForPosture,
+        Vector3 guardPoint,
+        bool hasGuardPoint)
+    {
+        hasSquadPosture = true;
+        squadPosture = posture;
+        squadRallyPoint = rallyPoint;
+        hasSquadRallyPoint = hasRallyPoint;
+        squadLeashRange = leashRangeForPosture;
+
+        // 记住小队下发的驻守槽位：命令结束后要回到这里，而不是停在追击途中。
+        hasSquadGuardPoint = hasGuardPoint;
+        if (hasGuardPoint)
+        {
+            squadGuardPoint = guardPoint;
+            guardPosition = guardPoint;
+        }
+
+        // 姿态可能改变感知/拴绳，立即重新评估目标。
+        searchTimer = 0f;
+    }
+
+    /// <summary>离开小队时清除姿态，恢复未编队时的个体行为。</summary>
+    public void ClearSquadPosture()
+    {
+        hasSquadPosture = false;
+        squadPosture = SquadPosture.Garrison;
+        hasSquadRallyPoint = false;
+        squadLeashRange = 0f;
+        hasSquadGuardPoint = false;
+        guardPosition = transform.position;
+        searchTimer = 0f;
     }
 
     private void OnEnable()
@@ -96,10 +166,27 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
         }
 
         // 玩家命令优先于个体 AI：先执行移动/集火，命令结束后再恢复驻守逻辑。
-        if (commander != null && commander.HasOrder)
+        bool hasOrder = commander != null && commander.HasOrder;
+        if (hasOrder)
         {
+            hadOrder = true;
             ExecuteOrder();
             return;
+        }
+
+        // 命令刚结束（尤其是小队统一清空跟随命令）：
+        // - 驻守成员回到小队推下来的集结点/阵型槽位，而不是停在追击途中；
+        // - 戒备或未编队成员仍把当前站位记为驻守点（战后不返回旧位置）。
+        if (hadOrder)
+        {
+            hadOrder = false;
+            guardPosition = hasSquadPosture &&
+                            squadPosture == SquadPosture.Garrison &&
+                            hasSquadGuardPoint
+                ? squadGuardPoint
+                : transform.position;
+            SetState(State.Idle);
+            locomotion.Halt();
         }
 
         if (!HasLiveTarget())
@@ -140,6 +227,12 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
 
         if (target == null)
         {
+            if (hasSquadPosture && squadPosture == SquadPosture.Alert)
+            {
+                StayInPlace();
+                return;
+            }
+
             Guard();
             return;
         }
@@ -161,7 +254,8 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
         }
 
         // 先判拴绳再发拦截请求，避免“请求 -> 下一帧超绳释放 -> 再请求”的抖动。
-        if (DistanceToGuard(candidate) > leashRange)
+        // 驻守姿态的拴绳锚点是集结点，半径 5m；未编队时仍用 guardPosition / 14m。
+        if (DistanceToLeashAnchor(candidate) > EffectiveLeashRange())
         {
             return;
         }
@@ -188,7 +282,8 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
             targets.ClearAll();
 
             Vector3 destination = commander.Destination;
-            if (UnitCommander.HorizontalDistance(transform.position, destination) <= commandArriveRadius)
+            if (!commander.FollowOrder &&
+                UnitCommander.HorizontalDistance(transform.position, destination) <= commandArriveRadius)
             {
                 commander.ClearOrder();
                 guardPosition = transform.position;
@@ -197,6 +292,8 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
                 return;
             }
 
+            // 跟随命令到点也不清空：锚点还在移动，下一帧会给出新槽位；
+            // 由小队 CompleteMoveOrder 统一清命令，避免“到点→清命令→回驻守”抖动。
             SetState(State.Move);
             locomotion.SetPaused(false);
             locomotion.MoveTo(destination);
@@ -301,9 +398,45 @@ public class WarriorBrain : MonoBehaviour, IPerceptionSource, IUnitAgentState
         }
     }
 
+    /// <summary>戒备姿态战后原地停留：不返回旧驻守点。</summary>
+    private void StayInPlace()
+    {
+        targets.ClearAll();
+        guardPosition = transform.position;
+
+        if (state != State.Idle)
+        {
+            SetState(State.Idle);
+            locomotion.Halt();
+        }
+        else
+        {
+            locomotion.SetPaused(true);
+        }
+    }
+
     private bool IsBeyondLeash()
     {
-        return DistanceToGuard(target) > leashRange;
+        return DistanceToLeashAnchor(target) > EffectiveLeashRange();
+    }
+
+    private float EffectiveLeashRange()
+    {
+        return hasSquadPosture && squadPosture == SquadPosture.Garrison && hasSquadRallyPoint
+            ? Mathf.Max(0.1f, squadLeashRange)
+            : leashRange;
+    }
+
+    private Vector3 LeashAnchor()
+    {
+        return hasSquadPosture && squadPosture == SquadPosture.Garrison && hasSquadRallyPoint
+            ? squadRallyPoint
+            : guardPosition;
+    }
+
+    private float DistanceToLeashAnchor(IDamageable candidate)
+    {
+        return candidate.DistanceTo(LeashAnchor());
     }
 
     private float DistanceToGuard(IDamageable candidate)

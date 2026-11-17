@@ -75,6 +75,9 @@ public class UnitMotor : UnitLocomotion
             return;
         }
 
+        // FaceDirection 会临时关闭自动旋转，恢复移动时必须打开。
+        agent.updateRotation = true;
+
         if (agent.isStopped)
         {
             agent.isStopped = false;
@@ -98,5 +101,25 @@ public class UnitMotor : UnitLocomotion
 
         agent.isStopped = true;
         agent.ResetPath();
+    }
+
+    /// <summary>停下并临时关闭 NavMeshAgent 自动旋转，再转向指定方向。</summary>
+    public override void FaceDirection(Vector3 worldDirection)
+    {
+        if (agent == null)
+        {
+            base.FaceDirection(worldDirection);
+            return;
+        }
+
+        worldDirection.y = 0f;
+        if (worldDirection.sqrMagnitude < 0.0001f)
+        {
+            return;
+        }
+
+        agent.isStopped = true;
+        agent.updateRotation = false;
+        transform.rotation = Quaternion.LookRotation(worldDirection.normalized, Vector3.up);
     }
 }

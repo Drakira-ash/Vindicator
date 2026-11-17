@@ -44,7 +44,7 @@ public class DeveloperTableTests
     public void Headers_MatchDesign()
     {
         CollectionAssert.AreEqual(
-            new[] { "ID", "名称", "阵营", "队形", "人数", "状态", "目标" },
+            new[] { "ID", "名称", "阵营", "队形", "人数", "状态", "姿态", "目标" },
             DeveloperTableData.SquadHeaders);
 
         CollectionAssert.AreEqual(
@@ -101,7 +101,8 @@ public class DeveloperTableTests
         Assert.AreEqual("Player", rows[0][2]);
         Assert.AreEqual("Grid", rows[0][3]);
         Assert.AreEqual("2", rows[0][4]);
-        Assert.AreEqual("-", rows[0][6]);
+        Assert.AreEqual("Garrison", rows[0][6], "友军小队默认驻守");
+        Assert.AreEqual("-", rows[0][7]);
     }
 
     private Unit CreateUnit(string name, UnitTeam team, Vector3 position)

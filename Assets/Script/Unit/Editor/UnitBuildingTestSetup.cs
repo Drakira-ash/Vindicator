@@ -120,11 +120,18 @@ public static partial class UnitDemoSetup
         }
     }
 
-    private static void EnsureDeveloperModeObject()
+    /// <summary>确保场景里有开发者模式对象，并把 startEnabled 设为 true（幂等）。</summary>
+    public static void EnsureDeveloperModeObject()
     {
         var existing = GameObject.Find("DeveloperMode");
         if (existing != null)
         {
+            var current = existing.GetComponent<DeveloperModeController>();
+            if (current != null)
+            {
+                SetSerializedValue(current, "startEnabled", true);
+            }
+
             return;
         }
 

@@ -21,6 +21,7 @@ public class UnitCommander : MonoBehaviour
     private UnitOrderType orderType = UnitOrderType.None;
     private Vector3 destination;
     private UnitHealth attackTarget;
+    private bool followOrder;
 
     /// <summary>所属小队编号；-1 表示未编队。</summary>
     public int SquadId
@@ -28,6 +29,15 @@ public class UnitCommander : MonoBehaviour
         get { return squadId; }
         set { squadId = value; }
     }
+
+    /// <summary>在小队阵型中的稳定槽位下标；-1 表示未分配。</summary>
+    public int SlotIndex { get; set; } = -1;
+
+    /// <summary>
+    /// 跟随移动命令：成员到达当前槽位后不清空命令，由小队统一结束。
+    /// 用于锚点持续移动时避免成员每帧“到点→清命令→回驻守”抖动。
+    /// </summary>
+    public bool FollowOrder => followOrder;
 
     /// <summary>当前命令类型。</summary>
     public UnitOrderType OrderType => orderType;
@@ -51,12 +61,13 @@ public class UnitCommander : MonoBehaviour
         return orderType == UnitOrderType.Attack && target != null;
     }
 
-    /// <summary>下发移动命令。</summary>
-    public void IssueMove(Vector3 worldPosition, int squad = -1)
+    /// <summary>下发移动命令；follow 为 true 时到点不清命令，由小队统一结束。</summary>
+    public void IssueMove(Vector3 worldPosition, int squad = -1, bool follow = false)
     {
         orderType = UnitOrderType.Move;
         destination = worldPosition;
         attackTarget = null;
+        followOrder = follow;
 
         if (squad >= 0)
         {
@@ -74,6 +85,7 @@ public class UnitCommander : MonoBehaviour
 
         orderType = UnitOrderType.Attack;
         attackTarget = target;
+        followOrder = false;
 
         if (squad >= 0)
         {
@@ -86,6 +98,7 @@ public class UnitCommander : MonoBehaviour
     {
         orderType = UnitOrderType.None;
         attackTarget = null;
+        followOrder = false;
     }
 
     /// <summary>清空命令并退出小队（解散编队时使用）。</summary>
@@ -93,6 +106,7 @@ public class UnitCommander : MonoBehaviour
     {
         ClearOrder();
         squadId = -1;
+        SlotIndex = -1;
     }
 
     /// <summary>水平距离，编队到达判定统一用这个口径。</summary>

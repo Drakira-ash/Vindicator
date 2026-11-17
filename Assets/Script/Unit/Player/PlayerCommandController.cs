@@ -36,6 +36,12 @@ public class PlayerCommandController : MonoBehaviour
     /// <summary>当前选择框（屏幕坐标，原点左下）。</summary>
     public Rect SelectionRect => selectionRect;
 
+    /// <summary>
+    /// 旧的选择输入开关。UI_Test 里由 <c>SelectionCommandBridge</c> 关闭，
+    /// 交给新 UI 的 SelectionInputReader 处理框选/点选；右键命令与热键保留。
+    /// </summary>
+    public bool LegacySelectionEnabled { get; set; } = true;
+
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Bootstrap()
     {
@@ -118,7 +124,11 @@ public class PlayerCommandController : MonoBehaviour
         }
 
 #if ENABLE_LEGACY_INPUT_MANAGER
-        HandleSelectionInput();
+        if (LegacySelectionEnabled)
+        {
+            HandleSelectionInput();
+        }
+
         HandleCommandInput();
         HandleHotkeys();
 #endif
@@ -169,12 +179,55 @@ public class PlayerCommandController : MonoBehaviour
         if (squad != null)
         {
             squad.MoveTo(point, FormationLayout.Flatten(forward));
+            MoveDestinationFlag.Show(point, UnitTeam.Player);
             Log(string.Format("[Order] {0} 按 {1} 队形移动到 {2}", squad.SquadName, squad.Formation, point));
             return true;
         }
 
         DropSquadOrders(units);
-        return IssueGroupMove(units, point);
+        bool issued = IssueGroupMove(units, point);
+        if (issued)
+        {
+            MoveDestinationFlag.Show(point, UnitTeam.Player);
+        }
+
+        return issued;
+    }
+
+    /// <summary>循环切换当前整队阵型：横队 → 纵队 → 方阵 → 横队。</summary>
+    public bool CycleSelectedSquadFormation()
+    {
+        var squad = SelectionSquad();
+        if (squad == null)
+        {
+            Log("[Formation] 需要完整选中一个小队");
+            return false;
+        }
+
+        FormationType next = squad.Formation == FormationType.Line
+            ? FormationType.Column
+            : (squad.Formation == FormationType.Column ? FormationType.Grid : FormationType.Line);
+        squad.SetFormation(next);
+        Log(string.Format("[Formation] {0} -> {1}", squad.SquadName, next));
+        return true;
+    }
+
+    /// <summary>切换当前整队姿态：驻守 ↔ 戒备。</summary>
+    public bool ToggleSelectedSquadPosture()
+    {
+        var squad = SelectionSquad();
+        if (squad == null)
+        {
+            Log("[Posture] 需要完整选中一个小队");
+            return false;
+        }
+
+        SquadPosture next = squad.Posture == SquadPosture.Garrison
+            ? SquadPosture.Alert
+            : SquadPosture.Garrison;
+        squad.SetPosture(next);
+        Log(string.Format("[Posture] {0} -> {1}", squad.SquadName, next));
+        return true;
     }
 
     /// <summary>
@@ -594,6 +647,11 @@ public class PlayerCommandController : MonoBehaviour
 
     private void OnGUI()
     {
+        if (!LegacySelectionEnabled)
+        {
+            return;
+        }
+
         if (dragging && (selectionRect.width >= 2f || selectionRect.height >= 2f))
         {
             DrawSelectionRect();
@@ -740,6 +798,19 @@ public class PlayerCommandController : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.G))
         {
             CreateSquadFromSelection();
+            return;
+        }
+
+        // Z：循环阵型；X：切换姿态（只对完整选中的小队生效）。
+        if (Input.GetKeyDown(KeyCode.Z))
+        {
+            CycleSelectedSquadFormation();
+            return;
+        }
+
+        if (Input.GetKeyDown(KeyCode.X))
+        {
+            ToggleSelectedSquadPosture();
             return;
         }
 
